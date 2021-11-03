@@ -15,15 +15,18 @@ import (
 	"fmt"
 	"regexp"
 	"strconv"
+	"strings"
 )
 
-var versionRE = regexp.MustCompile("^(\\d+)\\.(\\d+)\\.(\\d+)(.*)?$")
+var versionRE = regexp.MustCompile("^(\\d+)\\.(\\d+)\\.[sdi-]*(\\d+)(.*)?$")
 
 type version struct {
 	major  int
 	minor  int
 	patch  int
 	suffix string
+	shopeeVersion bool
+	originVersion string
 }
 
 func parseVersion(v string) version {
@@ -40,15 +43,24 @@ func parseVersion(v string) version {
 	if err != nil {
 		panic(fmt.Sprintf("failed to parse %v as number", matches[3]))
 	}
+
+	shopeeVersion := strings.Contains(v,"sdi-")
+	originVersion := v
+
 	return version{
 		major:  major,
 		minor:  minor,
 		patch:  patch,
 		suffix: matches[4],
+		shopeeVersion: shopeeVersion,
+		originVersion: originVersion,
 	}
 }
 
 func (v version) String() string {
+	if v.shopeeVersion {
+		return v.originVersion
+	}
 	return fmt.Sprintf("%v.%v.%v%v", v.major, v.minor, v.patch, v.suffix)
 }
 
