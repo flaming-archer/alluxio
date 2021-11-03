@@ -19,7 +19,7 @@ import (
 
 const (
 	// The version of the hadoop client that the Alluxio client will be built for
-	defaultHadoopClient = "hadoop-3.3"
+	defaultHadoopClient = "hadoop-2.10"
 )
 
 var (

@@ -33,12 +33,13 @@ var hadoopDistributions = map[string]version{
 	"hadoop-2.7": parseVersion("2.7.3"),
 	"hadoop-2.8": parseVersion("2.8.5"),
 	"hadoop-2.9": parseVersion("2.9.2"),
+	"hadoop-2.10": parseVersion("2.10.sdi-040"),
 	"hadoop-3.0": parseVersion("3.0.3"),
 	"hadoop-3.1": parseVersion("3.1.1"),
 	"hadoop-3.2": parseVersion("3.2.1"),
 	"hadoop-3.3": parseVersion("3.3.0"),
-	// This distribution type is built with 2.7.3, but doesn't include the hadoop version in the name.
-	"default": parseVersion("2.7.3"),
+	// This distribution type is built with 2.10.1, but doesn't include the hadoop version in the name.
+	"default": parseVersion("2.10.sdi-040"),
 }
 
 type module struct {
@@ -57,6 +58,7 @@ var ufsModules = map[string]module{
 	"ufs-hadoop-2.7": {"hadoop-2.7", true, "-pl underfs/hdfs -Pufs-hadoop-2 -Dufs.hadoop.version=2.7.3 -PhdfsActiveSync"},
 	"ufs-hadoop-2.8": {"hadoop-2.8", true, "-pl underfs/hdfs -Pufs-hadoop-2 -Dufs.hadoop.version=2.8.5 -PhdfsActiveSync"},
 	"ufs-hadoop-2.9": {"hadoop-2.9", true, "-pl underfs/hdfs -Pufs-hadoop-2 -Dufs.hadoop.version=2.9.2 -PhdfsActiveSync"},
+	"ufs-hadoop-2.10": {"hadoop-2.10", true, "-pl underfs/hdfs -Pufs-hadoop-2 -Dufs.hadoop.version=2.10.sdi-040 -PhdfsActiveSync"},
 	"ufs-hadoop-3.0": {"hadoop-3.0", false, "-pl underfs/hdfs -Pufs-hadoop-3 -Dufs.hadoop.version=3.0.0 -PhdfsActiveSync"},
 	"ufs-hadoop-3.1": {"hadoop-3.1", false, "-pl underfs/hdfs -Pufs-hadoop-3 -Dufs.hadoop.version=3.1.1 -PhdfsActiveSync"},
 	"ufs-hadoop-3.2": {"hadoop-3.2", true, "-pl underfs/hdfs -Pufs-hadoop-3 -Dufs.hadoop.version=3.2.1 -PhdfsActiveSync"},
