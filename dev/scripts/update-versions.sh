@@ -103,6 +103,10 @@ function update_dockerfiles() {
     perl -pi -e "s/${1}/${2}/g" integration/docker/Dockerfile-dev
 }
 
+function update_shopee_tarballs() {
+    perl -pi -e "s/${1}/${2}/g" dev/scripts/generate-tarballs-shopee.sh
+}
+
 
 function main() {
     local skip_maven="false"
@@ -140,6 +144,7 @@ function main() {
     update_docs "$_old" "$_new"
     update_k8s "$_old" "$_new"
     update_dockerfiles "$_old" "$_new"
+    update_shopee_tarballs "$_old" "$_new"
 
     exit 0
 }
