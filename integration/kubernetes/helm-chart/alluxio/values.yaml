@@ -17,7 +17,7 @@ fullnameOverride: alluxio
 
 # Docker Image
 image: alluxio/alluxio
-imageTag: 2.7.1-sdi-004
+imageTag: 2.7.1-sdi-005
 imagePullPolicy: IfNotPresent
 
 # Security Context
