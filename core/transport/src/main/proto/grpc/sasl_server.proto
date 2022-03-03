@@ -15,6 +15,7 @@ enum ChannelAuthenticationScheme {
   NOSASL = 0;
   SIMPLE = 1;
   CUSTOM = 2;
+  RPC = 3;
 }
 
 message SaslMessage {

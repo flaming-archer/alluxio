@@ -5433,6 +5433,14 @@ public final class PropertyKey implements Comparable<PropertyKey> {
           .setScope(Scope.ALL)
           .setIsDynamic(false)
           .build();
+  public static final PropertyKey SECURITY_RPC_PASSWORD_AUTHENTICATION_ENABLED =
+      new Builder(Name.SECURITY_RPC_PASSWORD_AUTHENTICATION_ENABLED)
+          .setDefaultValue(false)
+          .setDescription("Whether to enable check username and rpcPassword.")
+          .setConsistencyCheckLevel(ConsistencyCheckLevel.ENFORCE)
+          .setScope(Scope.SERVER)
+          .setIsDynamic(false)
+          .build();
   public static final PropertyKey SECURITY_AUTHORIZATION_PERMISSION_SUPERGROUP =
       new Builder(Name.SECURITY_AUTHORIZATION_PERMISSION_SUPERGROUP)
           .setDefaultValue("supergroup")
@@ -5489,6 +5497,15 @@ public final class PropertyKey implements Comparable<PropertyKey> {
           .setConsistencyCheckLevel(ConsistencyCheckLevel.ENFORCE)
           .setScope(Scope.CLIENT)
           .build();
+  public static final PropertyKey SECURITY_LOGIN_RPC_PASSWORD =
+      new Builder(Name.SECURITY_LOGIN_RPC_PASSWORD)
+          .setDescription("When alluxio.security.authentication.type is set to SIMPLE or "
+               + "CUSTOM, user application uses this property to indicate the user requesting "
+               + "Alluxio service. When alluxio.security.rpc-password.authentication.enabled "
+               + "is set to true, Alluxio master service will check the username and rpcPassword.")
+          .setConsistencyCheckLevel(ConsistencyCheckLevel.ENFORCE)
+          .setScope(Scope.CLIENT)
+          .build();
   public static final PropertyKey AUTHENTICATION_INACTIVE_CHANNEL_REAUTHENTICATE_PERIOD =
       new Builder(Name.AUTHENTICATION_INACTIVE_CHANNEL_REAUTHENTICATE_PERIOD)
           .setDefaultValue("3day")
@@ -5497,6 +5514,77 @@ public final class PropertyKey implements Comparable<PropertyKey> {
                   + "their target master upon being used for new RPCs.")
           .setConsistencyCheckLevel(ConsistencyCheckLevel.WARN)
           .setScope(Scope.ALL)
+          .build();
+  public static final PropertyKey SECURITY_RPC_PASSWORD_SHADOW_FILE =
+      new Builder(Name.SECURITY_RPC_PASSWORD_SHADOW_FILE)
+          .setDefaultValue("/etc/hadoop/shadow")
+          .setDescription("The file is located on the server and contains the username and "
+                   + "rpcPassword, which is used to verify the authentication information.")
+          .setScope(Scope.MASTER)
+          .build();
+  public static final PropertyKey SECURITY_RPC_PASSWORD_SHADOW_FILE_CHECKSUM_ENABLED =
+      new Builder(Name.SECURITY_RPC_PASSWORD_SHADOW_FILE_CHECKSUM_ENABLED)
+          .setDefaultValue(false)
+          .setDescription("Whether to enable check sum for shadow file.")
+          .setScope(Scope.MASTER)
+          .build();
+  public static final PropertyKey SECURITY_RPC_PASSWORD_MAPPING =
+      new Builder(Name.SECURITY_RPC_PASSWORD_MAPPING)
+          .setDefaultValue("alluxio.security.authentication.password"
+                          + ".ShadowFileRpcPasswordMapping")
+          .setDescription("Full name of the class that will be instantiated for "
+                          + "rpc-password mapping.")
+          .setScope(Scope.MASTER)
+          .build();
+  public static final PropertyKey SECURITY_RPC_PASSWORD_SHADOW_FILE_CACHE_SEC =
+      new Builder(Name.SECURITY_RPC_PASSWORD_SHADOW_FILE_CACHE_SEC)
+          .setDefaultValue(300)
+          .setDescription("Time for cached shade file to expire")
+          .setScope(Scope.MASTER)
+          .build();
+  public static final PropertyKey SECURITY_RPC_PASSWORD_CACHE_SECS =
+      new Builder(Name.SECURITY_RPC_PASSWORD_CACHE_SECS)
+          .setDefaultValue(300)
+          .setDescription("Time for cached username and rpcPassword to expire")
+          .setScope(Scope.MASTER)
+          .build();
+  public static final PropertyKey SECURITY_RPC_PASSWORD_NEGATIVE_CACHE_SECS =
+      new Builder(Name.SECURITY_RPC_PASSWORD_NEGATIVE_CACHE_SECS)
+          .setDefaultValue(30)
+          .setDescription("Time for the negative cache for rpcPassword to expire")
+          .setScope(Scope.MASTER)
+          .build();
+  public static final PropertyKey SECURITY_RPC_PASSWORD_CACHE_WARN_AFTER_MS =
+      new Builder(Name.SECURITY_RPC_PASSWORD_CACHE_WARN_AFTER_MS)
+          .setDefaultValue(5000)
+          .setDescription("If the time used to load rpcPassword exceeds this value, "
+                        +  "the alarm log will be output")
+          .setScope(Scope.MASTER)
+          .build();
+  public static final PropertyKey SECURITY_RPC_PASSWORD_CACHE_BACKGROUND_RELOAD =
+      new Builder(Name.SECURITY_RPC_PASSWORD_CACHE_BACKGROUND_RELOAD)
+          .setDefaultValue(false)
+          .setDescription("Whether to load rpcPassword for cache in background")
+          .setScope(Scope.MASTER)
+          .build();
+  public static final PropertyKey SECURITY_RPC_PASSWORD_CACHE_BACKGROUND_RELOAD_THREADS =
+      new Builder(Name.SECURITY_RPC_PASSWORD_CACHE_BACKGROUND_RELOAD_THREADS)
+          .setDefaultValue(3)
+          .setDescription("The number of thread to reload rpcPassword for cache")
+          .setScope(Scope.MASTER)
+          .build();
+  public static final PropertyKey SECURITY_RPC_PASSWORD_MATCH_CACHE_MINUTE =
+      new Builder(Name.SECURITY_RPC_PASSWORD_MATCH_CACHE_MINUTE)
+          .setDefaultValue(1)
+          .setDescription("the length of time after the rpcPassword is cached "
+                          + "that it should be automatically removed")
+          .setScope(Scope.MASTER)
+          .build();
+  public static final PropertyKey SECURITY_RPC_PASSWORD_MATCH_CACHE_SIZE =
+      new Builder(Name.SECURITY_RPC_PASSWORD_MATCH_CACHE_SIZE)
+          .setDefaultValue(10000)
+          .setDescription("the max number of rpcPassword could be cached")
+          .setScope(Scope.MASTER)
           .build();
   //
   // Network TLS support
@@ -7099,6 +7187,8 @@ public final class PropertyKey implements Comparable<PropertyKey> {
         "alluxio.security.authentication.type";
     public static final String SECURITY_AUTHORIZATION_PERMISSION_ENABLED =
         "alluxio.security.authorization.permission.enabled";
+    public static final String SECURITY_RPC_PASSWORD_AUTHENTICATION_ENABLED =
+         "alluxio.security.rpc-password.authentication.enabled";
     public static final String SECURITY_AUTHORIZATION_PERMISSION_SUPERGROUP =
         "alluxio.security.authorization.permission.supergroup";
     public static final String SECURITY_AUTHORIZATION_PERMISSION_UMASK =
@@ -7110,8 +7200,31 @@ public final class PropertyKey implements Comparable<PropertyKey> {
     public static final String SECURITY_LOGIN_IMPERSONATION_USERNAME =
         "alluxio.security.login.impersonation.username";
     public static final String SECURITY_LOGIN_USERNAME = "alluxio.security.login.username";
+    public static final String SECURITY_LOGIN_RPC_PASSWORD = "alluxio.security.login.rpc-password";
     public static final String AUTHENTICATION_INACTIVE_CHANNEL_REAUTHENTICATE_PERIOD =
         "alluxio.security.stale.channel.purge.interval";
+    public static final String SECURITY_RPC_PASSWORD_SHADOW_FILE =
+         "alluxio.security.rpc-password.shadow.file";
+    public static final String SECURITY_RPC_PASSWORD_SHADOW_FILE_CHECKSUM_ENABLED =
+         "alluxio.security.rpc-password.shadow.file.checksum.enabled";
+    public static final String  SECURITY_RPC_PASSWORD_SHADOW_FILE_CACHE_SEC =
+         "alluxio.security.rpc-password.shadow.file.cache.sec";
+    public static final String SECURITY_RPC_PASSWORD_MAPPING =
+         "alluxio.security.rpc-password.mapping";
+    public static final String SECURITY_RPC_PASSWORD_CACHE_SECS =
+         "alluxio.security.rpc-password.cache.secs";
+    public static final String SECURITY_RPC_PASSWORD_NEGATIVE_CACHE_SECS =
+         "alluxio.security.rpc-password.negative-cache.secs";
+    public static final String SECURITY_RPC_PASSWORD_CACHE_WARN_AFTER_MS =
+         "alluxio.security.rpc-password.cache.warn.after.ms";
+    public static final String SECURITY_RPC_PASSWORD_CACHE_BACKGROUND_RELOAD =
+         "hadoop.security.rpc-password.cache.background.reload";
+    public static final String SECURITY_RPC_PASSWORD_CACHE_BACKGROUND_RELOAD_THREADS =
+         "alluxio.security.rpc-password.cache.background.reload.threads";
+    public static final String SECURITY_RPC_PASSWORD_MATCH_CACHE_MINUTE =
+         "alluxio.security.rpc-password.match.cache.expire.minute";
+    public static final String SECURITY_RPC_PASSWORD_MATCH_CACHE_SIZE =
+         "hadoop.security.rpc-password.match.cache.size";
 
     //
     // Network TLS support

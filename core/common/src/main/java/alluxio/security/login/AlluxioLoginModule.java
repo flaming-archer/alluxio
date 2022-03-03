@@ -13,13 +13,17 @@ package alluxio.security.login;
 
 import alluxio.security.User;
 
+import java.io.IOException;
 import java.security.Principal;
 import java.util.Map;
 import java.util.Set;
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.NotThreadSafe;
 import javax.security.auth.Subject;
+import javax.security.auth.callback.Callback;
 import javax.security.auth.callback.CallbackHandler;
+import javax.security.auth.callback.PasswordCallback;
+import javax.security.auth.callback.UnsupportedCallbackException;
 import javax.security.auth.login.LoginException;
 import javax.security.auth.spi.LoginModule;
 
@@ -31,6 +35,8 @@ import javax.security.auth.spi.LoginModule;
 public final class AlluxioLoginModule implements LoginModule {
   private Subject mSubject;
   private User mUser;
+  private String mRpcPassword;
+  private CallbackHandler mCallbackHandler;
 
   /**
    * Constructs a new {@link AlluxioLoginModule}.
@@ -41,6 +47,7 @@ public final class AlluxioLoginModule implements LoginModule {
   public void initialize(Subject subject, CallbackHandler callbackHandler,
       Map<String, ?> sharedState, Map<String, ?> options) {
     mSubject = subject;
+    mCallbackHandler = callbackHandler;
   }
 
   /**
@@ -67,6 +74,7 @@ public final class AlluxioLoginModule implements LoginModule {
   public boolean abort() throws LoginException {
     logout();
     mUser = null;
+    mRpcPassword = null;
     return true;
   }
 
@@ -92,8 +100,18 @@ public final class AlluxioLoginModule implements LoginModule {
 
     // if a user is found, convert it to an Alluxio user and save it.
     if (user != null) {
+      PasswordCallback passwordCallback = new PasswordCallback(" user rpc-password: ", true);
+      try {
+        mCallbackHandler.handle(new Callback[]{ passwordCallback });
+      } catch (IOException | UnsupportedCallbackException e) {
+        throw new LoginException(e.getMessage());
+      }
       mUser = new User(user.getName());
+      mRpcPassword = new String(passwordCallback.getPassword());
       mSubject.getPrincipals().add(mUser);
+      if (mRpcPassword != null && !mRpcPassword.isEmpty()) {
+        mSubject.getPrivateCredentials().add(mRpcPassword);
+      }
       return true;
     }
 
@@ -115,6 +133,9 @@ public final class AlluxioLoginModule implements LoginModule {
 
     if (mUser != null) {
       mSubject.getPrincipals().remove(mUser);
+    }
+    if (mRpcPassword != null) {
+      mSubject.getPrivateCredentials().remove(mRpcPassword);
     }
 
     return true;

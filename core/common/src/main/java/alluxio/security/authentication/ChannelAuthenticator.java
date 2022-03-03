@@ -145,6 +145,8 @@ public class ChannelAuthenticator {
         return ChannelAuthenticationScheme.SIMPLE;
       case CUSTOM:
         return ChannelAuthenticationScheme.CUSTOM;
+      case RPC:
+        return ChannelAuthenticationScheme.RPC;
       default:
         throw new UnauthenticatedException(String.format(
             "Configured authentication type is not supported: %s", authType.getAuthName()));
@@ -165,6 +167,7 @@ public class ChannelAuthenticator {
     switch (authScheme) {
       case SIMPLE:
       case CUSTOM:
+      case RPC:
         return new alluxio.security.authentication.plain.SaslClientHandlerPlain(mParentSubject,
             mConfiguration);
       default:

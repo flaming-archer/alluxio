@@ -13,6 +13,7 @@ package alluxio.security.authentication;
 
 import alluxio.conf.AlluxioConfiguration;
 import alluxio.conf.PropertyKey;
+import alluxio.security.authentication.password.RpcPasswordAuthenticationProvider;
 import alluxio.security.authentication.plain.CustomAuthenticationProvider;
 import alluxio.security.authentication.plain.PlainSaslServer;
 import alluxio.security.authentication.plain.PlainSaslServerCallbackHandler;
@@ -48,6 +49,8 @@ public interface AuthenticationProvider {
           String customProviderName =
               conf.get(PropertyKey.SECURITY_AUTHENTICATION_CUSTOM_PROVIDER_CLASS);
           return new CustomAuthenticationProvider(customProviderName);
+        case RPC:
+          return RpcPasswordAuthenticationProvider.getUserToRpcPasswordMappingService(conf);
         default:
           throw new AuthenticationException("Unsupported AuthType: " + authType.getAuthName());
       }

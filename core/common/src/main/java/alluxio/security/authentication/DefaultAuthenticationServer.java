@@ -129,6 +129,7 @@ public class DefaultAuthenticationServer
     switch (authScheme) {
       case SIMPLE:
       case CUSTOM:
+      case RPC:
         return new SaslServerHandlerPlain(mHostName, mConfiguration, mImpersonationAuthenticator);
       default:
         throw new StatusRuntimeException(Status.UNAUTHENTICATED.augmentDescription(
@@ -182,6 +183,7 @@ public class DefaultAuthenticationServer
       case NOSASL:
       case SIMPLE:
       case CUSTOM:
+      case RPC:
         return;
       default:
         throw new RuntimeException("Authentication type not supported:" + authType.name());

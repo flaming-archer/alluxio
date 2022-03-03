@@ -111,7 +111,6 @@ public class AuthenticatedChannelServerDriver implements StreamObserver<SaslMess
             UUID.fromString(saslMessage.getClientId()),
             saslMessage.getChannelRef());
       }
-
       LOG.debug("Responding to a message of channel: {}. Message: {}", mChannelRef, saslMessage);
       // Consult sasl server for handling the message.
       SaslMessage response = mSaslServerHandler.handleMessage(saslMessage);

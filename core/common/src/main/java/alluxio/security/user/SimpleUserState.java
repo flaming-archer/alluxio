@@ -33,6 +33,7 @@ import javax.security.auth.login.LoginException;
  */
 public class SimpleUserState extends BaseUserState {
   private static final Logger LOG = LoggerFactory.getLogger(SimpleUserState.class);
+  static final String ALLUXIO_USER_RPCPASSWORD = "ALLUXIO_USER_RPCPASSWORD";
 
   /**
    * Factory class to create the user state.
@@ -41,7 +42,7 @@ public class SimpleUserState extends BaseUserState {
     @Override
     public UserState create(Subject subject, AlluxioConfiguration conf, boolean isServer) {
       AuthType authType = conf.getEnum(PropertyKey.SECURITY_AUTHENTICATION_TYPE, AuthType.class);
-      if (authType == AuthType.SIMPLE || authType == AuthType.CUSTOM) {
+      if (authType == AuthType.SIMPLE || authType == AuthType.CUSTOM || authType == AuthType.RPC) {
         return new SimpleUserState(subject, conf);
       }
       LOG.debug("N/A: auth type is not SIMPLE or CUSTOM. authType: {}", authType.getAuthName());
@@ -56,16 +57,26 @@ public class SimpleUserState extends BaseUserState {
   @Override
   public User login() throws UnauthenticatedException {
     String username = "";
+    String rpcPassword = "";
     if (mConf.isSet(PropertyKey.SECURITY_LOGIN_USERNAME)) {
       username = mConf.get(PropertyKey.SECURITY_LOGIN_USERNAME);
     }
+    if (mConf.isSet(PropertyKey.SECURITY_LOGIN_RPC_PASSWORD)) {
+      rpcPassword = mConf.get(PropertyKey.SECURITY_LOGIN_RPC_PASSWORD);
+    } else if (System.getenv().containsKey(ALLUXIO_USER_RPCPASSWORD)) {
+      rpcPassword = System.getenv(ALLUXIO_USER_RPCPASSWORD);
+    } else if (System.getProperties().containsKey(ALLUXIO_USER_RPCPASSWORD)) {
+      rpcPassword = System.getProperty(ALLUXIO_USER_RPCPASSWORD);
+    }
+
     try {
       // Use the class loader of User.class to construct the LoginContext. LoginContext uses this
       // class loader to dynamically instantiate login modules. This enables
       // Subject#getPrincipals to use reflection to search for User.class instances.
       LoginContext loginContext =
           SecurityUtils.createLoginContext(AuthType.SIMPLE, mSubject, User.class.getClassLoader(),
-              new LoginModuleConfiguration(), new AppLoginModule.AppCallbackHandler(username));
+              new LoginModuleConfiguration(),
+              new AppLoginModule.AppCallbackHandler(username, rpcPassword));
       loginContext.login();
     } catch (LoginException e) {
       throw new UnauthenticatedException("Failed to login: " + e.getMessage(), e);

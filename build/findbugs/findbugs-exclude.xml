@@ -49,4 +49,10 @@
     </Or>
   </Match>
 
+  <Match>
+    <Class name="alluxio.bcrypt.BCrypt"/>
+    <Method name="streamtowords"/>
+    <Bug pattern="BIT_IOR_OF_SIGNED_BYTE"/>
+  </Match>
+
 </FindBugsFilter>

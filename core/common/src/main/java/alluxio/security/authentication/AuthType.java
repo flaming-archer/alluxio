@@ -43,6 +43,14 @@ public enum AuthType {
    * authentication is not supported.
    */
   KERBEROS,
+
+  /**
+   * User is aware in Alluxio. On the client side, the login username is determined by the
+   * "alluxio.security.login.username" property, or the OS user upon failure, and the
+   * rpcPassword is determined by the "alluxio.security.login.rpc-password" property.
+   * On the server side, the user is verified by the RpcPasswordAuthenticationProvider.
+   */
+  RPC
   ;
 
   /**
