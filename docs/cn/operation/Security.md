@@ -50,6 +50,26 @@ Alluxio还支持其它身份验证模式，如`NOSASL`和`CUSTOM`。
 
 这种模式目前还处于试验阶段，应该只在测试中使用。
 
+### RPC
+当`alluxio.security.authentication.type`为`RPC`时，身份验证被启用。
+在服务端可通过配置`alluxio.security.rpc-password.shadow.file`来指定保存用户名/密码的文件位置，
+默认位置为`/etc/alluxio/shadow`
+
+在客户端访问Alluxio服务之前，该客户端将按以下列次序获取用户信息以汇报给Alluxio服务进行身份验证：
+
+* 用户名：
+  1. 如果属性`alluxio.security.login.username`在客户端上被设置，其值将作为
+     此客户端的登录用户。
+  2. 否则，将从操作系统获取登录用户。
+* 密码：
+  1. 如果属性`alluxio.security.login.rpc-password`在客户端上被设置，其值将作为
+     此客户端的登录密码。
+  2. 否则，将从操作系统的环境变量查找`ALLUXIO_USER_RPCPASSWORD`是否被设置，
+     将其作为客户端登录密码。
+  3. 否则，从jvm虚拟机的变量查找`ALLUXIO_USER_RPCPASSWORD`是否被设置，
+     将其作为客户端登录密码。
+  4. 否则，密码将置为空。
+
 ## 访问权限控制 {#authorization}
 
 Alluxio文件系统为目录和文件实现了一个访问权限模型，该模型与POSIX标准的访问权限模型类似。

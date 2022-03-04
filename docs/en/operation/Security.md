@@ -67,6 +67,24 @@ The specified class must implement the interface `alluxio.security.authenticatio
 
 This mode is currently experimental and should only be used in tests.
 
+### RPC
+Authentication is **enabled** when the authentication type is `RPC`.
+
+Alluxio service load all the username and password by the file which configured by
+the `alluxio.security.rpc-password.shadow.file` property, with a default value
+`/etc/alluxio/shadow`.
+
+A client must identify itself with a username and password to the Alluxio service.
+
+If the property `alluxio.security.login.username` is set on the Alluxio client, its value will be
+used as the login user, otherwise, the login user is inferred from the operating system user
+executing the client process.
+
+If the property `alluxio.security.login.rpc-password` is set on the Alluxio client, its value will be
+used as the login password, otherwise, the environment variable `ALLUXIO_USER_RPCPASSWORD`
+and the JVM virtual machine variable `ALLUXIO_USER_RPCPASSWORD` are checked in turn as password.
+If none is detected, it is set to null.
+
 ## Authorization
 
 The Alluxio filesystem implements a permissions model similar to the POSIX permissions model.

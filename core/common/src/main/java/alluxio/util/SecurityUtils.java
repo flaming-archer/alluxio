@@ -65,10 +65,6 @@ public final class SecurityUtils {
     return conf.getBoolean(PropertyKey.SECURITY_AUTHORIZATION_PERMISSION_ENABLED);
   }
 
-  public static boolean isRpcPasswordAuthenticationEnabled(AlluxioConfiguration conf) {
-    return conf.getBoolean(PropertyKey.SECURITY_RPC_PASSWORD_AUTHENTICATION_ENABLED);
-  }
-
   /**
    * @param conf Alluxio configuration
    * @return the owner fetched from the gRPC client, or empty string if the fetch fails or

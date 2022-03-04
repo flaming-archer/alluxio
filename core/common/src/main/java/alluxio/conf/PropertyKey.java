@@ -5433,14 +5433,6 @@ public final class PropertyKey implements Comparable<PropertyKey> {
           .setScope(Scope.ALL)
           .setIsDynamic(false)
           .build();
-  public static final PropertyKey SECURITY_RPC_PASSWORD_AUTHENTICATION_ENABLED =
-      new Builder(Name.SECURITY_RPC_PASSWORD_AUTHENTICATION_ENABLED)
-          .setDefaultValue(false)
-          .setDescription("Whether to enable check username and rpcPassword.")
-          .setConsistencyCheckLevel(ConsistencyCheckLevel.ENFORCE)
-          .setScope(Scope.SERVER)
-          .setIsDynamic(false)
-          .build();
   public static final PropertyKey SECURITY_AUTHORIZATION_PERMISSION_SUPERGROUP =
       new Builder(Name.SECURITY_AUTHORIZATION_PERMISSION_SUPERGROUP)
           .setDefaultValue("supergroup")
@@ -5491,18 +5483,17 @@ public final class PropertyKey implements Comparable<PropertyKey> {
           .build();
   public static final PropertyKey SECURITY_LOGIN_USERNAME =
       new Builder(Name.SECURITY_LOGIN_USERNAME)
-          .setDescription("When alluxio.security.authentication.type is set to SIMPLE or "
-              + "CUSTOM, user application uses this property to indicate the user requesting "
+          .setDescription("When alluxio.security.authentication.type is set to SIMPLE or CUSTOM "
+              + " or RPC, user application uses this property to indicate the user requesting "
               + "Alluxio service. If it is not set explicitly, the OS login user will be used.")
           .setConsistencyCheckLevel(ConsistencyCheckLevel.ENFORCE)
           .setScope(Scope.CLIENT)
           .build();
   public static final PropertyKey SECURITY_LOGIN_RPC_PASSWORD =
       new Builder(Name.SECURITY_LOGIN_RPC_PASSWORD)
-          .setDescription("When alluxio.security.authentication.type is set to SIMPLE or "
-               + "CUSTOM, user application uses this property to indicate the user requesting "
-               + "Alluxio service. When alluxio.security.rpc-password.authentication.enabled "
-               + "is set to true, Alluxio master service will check the username and rpcPassword.")
+          .setDescription("When alluxio.security.authentication.type is set to RPC, user  "
+               + "application uses this property to indicate the user requesting Alluxio service. "
+               + "Alluxio master service will check the username and rpcPassword.")
           .setConsistencyCheckLevel(ConsistencyCheckLevel.ENFORCE)
           .setScope(Scope.CLIENT)
           .build();
@@ -5517,7 +5508,7 @@ public final class PropertyKey implements Comparable<PropertyKey> {
           .build();
   public static final PropertyKey SECURITY_RPC_PASSWORD_SHADOW_FILE =
       new Builder(Name.SECURITY_RPC_PASSWORD_SHADOW_FILE)
-          .setDefaultValue("/etc/hadoop/shadow")
+          .setDefaultValue("/etc/alluxio/shadow")
           .setDescription("The file is located on the server and contains the username and "
                    + "rpcPassword, which is used to verify the authentication information.")
           .setScope(Scope.MASTER)
@@ -7187,8 +7178,6 @@ public final class PropertyKey implements Comparable<PropertyKey> {
         "alluxio.security.authentication.type";
     public static final String SECURITY_AUTHORIZATION_PERMISSION_ENABLED =
         "alluxio.security.authorization.permission.enabled";
-    public static final String SECURITY_RPC_PASSWORD_AUTHENTICATION_ENABLED =
-         "alluxio.security.rpc-password.authentication.enabled";
     public static final String SECURITY_AUTHORIZATION_PERMISSION_SUPERGROUP =
         "alluxio.security.authorization.permission.supergroup";
     public static final String SECURITY_AUTHORIZATION_PERMISSION_UMASK =
