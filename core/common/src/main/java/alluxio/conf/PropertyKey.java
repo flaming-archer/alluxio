@@ -5352,20 +5352,6 @@ public final class PropertyKey implements Comparable<PropertyKey> {
               + "other value to use libfuse2 first, libfuse3 if libfuse2 failed")
           .setScope(Scope.ALL)
           .build();
-  public static final PropertyKey FUSE_PERMISSION_CHECK_ENABLED =
-      new Builder(Name.FUSE_PERMISSION_CHECK_ENABLED)
-          .setDefaultValue(true)
-          .setDescription("Whether to add -o default_permissions fuse mount option by default. "
-              + "When this option is enabled, kernel will perform its own permission check "
-              + "instead of deferring all permission checking to Alluxio. "
-              + "Alluxio Fuse does all the permission check "
-              + "with user that launches the Fuse application instead of "
-              + "the user running the Fuse operations. Please do not set this value to false "
-              + "unless permission check is not important in your workloads.")
-          .setConsistencyCheckLevel(ConsistencyCheckLevel.IGNORE)
-          .setScope(Scope.CLIENT)
-          .setIsHidden(true)
-          .build();
   public static final PropertyKey FUSE_SHARED_CACHING_READER_ENABLED =
       new Builder(Name.FUSE_SHARED_CACHING_READER_ENABLED)
           .setDefaultValue(false)
@@ -7227,7 +7213,6 @@ public final class PropertyKey implements Comparable<PropertyKey> {
     public static final String FUSE_PERMISSION_CHECK_ENABLED =
         "alluxio.fuse.permission.check.enabled";
     public static final String FUSE_SHARED_CACHING_READER_ENABLED =
-        "alluxio.fuse.shared.caching.reader.enabled";
     public static final String FUSE_LOGGING_THRESHOLD = "alluxio.fuse.logging.threshold";
     public static final String FUSE_MAXWRITE_BYTES = "alluxio.fuse.maxwrite.bytes";
     public static final String FUSE_UMOUNT_TIMEOUT =
