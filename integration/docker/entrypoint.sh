@@ -113,6 +113,10 @@ function mountAlluxioFSWithFuseOption {
   else
     exec integration/fuse/bin/alluxio-fuse mount -n "${@:1}"
   fi
+  ! mkdir -p ${MOUNT_POINT}
+  # Unmount first if cleanup failed and ignore error
+  ! umount ${MOUNT_POINT}
+  exec integration/fuse/bin/alluxio-fuse mount -n ${fuseOptions} ${MOUNT_POINT} ${ALLUXIO_PATH}
 }
 
 function startCsiServer {
