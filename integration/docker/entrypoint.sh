@@ -101,22 +101,17 @@ function formatWorkerIfSpecified {
   fi
 }
 
-function mountAlluxioFSWithFuseOption {
-  if [[ -n ${FUSE_ALLUXIO_PATH} || -n ${MOUNT_POINT} ]]; then
-    echo "Use of environment variables FUSE_ALLUXIO_PATH and MOUNT_POINT for Alluxio Fuse are deprecated."
-    printUsage
-    exit 1
+function mountAlluxioRootFSWithFuseOption {
+  local mountOptions=""
+  if [[ -n ${OPTIONS} ]]; then
+    if [[ ! ${OPTIONS} =~ ${FUSE_OPTS}=* ]] || [[ ! -n ${OPTIONS#*=} ]]; then
+      printUsage
+      exit 1
+    fi
+    mountOptions="-o ${OPTIONS#*=}"
   fi
-  local mountOptions="$1"
-  if [[ "${mountOptions}" =~ ${FUSE_OPTS}=* ]]; then
-    exec integration/fuse/bin/alluxio-fuse mount -n -o "${mountOptions#*=}" "${@:2}"
-  else
-    exec integration/fuse/bin/alluxio-fuse mount -n "${@:1}"
-  fi
-  ! mkdir -p ${MOUNT_POINT}
-  # Unmount first if cleanup failed and ignore error
-  ! umount ${MOUNT_POINT}
-  exec integration/fuse/bin/alluxio-fuse mount -n ${fuseOptions} ${MOUNT_POINT} ${ALLUXIO_PATH}
+
+  exec integration/fuse/bin/alluxio-fuse mount -n ${mountOptions}
 }
 
 function startCsiServer {
