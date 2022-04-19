@@ -58,7 +58,7 @@ RUN \
   apk add --no-cache ca-certificates wget bash && \
   apk add --no-cache --virtual .build-deps \
   build-base pkgconfig eudev git gcc make cmake gettext-dev libtool autoconf automake && \
-  ./dockerfile-common.sh install-libfuse2 && \
+  ./dockerfile-common.sh install-libfuse && \
   rm -rf libfuse && \
   apk add fuse3=3.2.6-r1 && \
   apk del --no-cache .build-deps
