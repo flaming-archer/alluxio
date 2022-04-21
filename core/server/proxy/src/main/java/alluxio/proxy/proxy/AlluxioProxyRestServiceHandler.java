@@ -9,12 +9,13 @@
  * See the NOTICE file distributed with this work for information regarding copyright ownership.
  */
 
-package alluxio.proxy;
+package alluxio.proxy.proxy;
 
 import alluxio.RestUtils;
 import alluxio.RuntimeConstants;
 import alluxio.conf.ConfigurationValueOptions;
 import alluxio.conf.ServerConfiguration;
+import alluxio.proxy.ProxyProcess;
 import alluxio.web.ProxyWebServer;
 import alluxio.wire.AlluxioProxyInfo;
 
@@ -37,11 +38,10 @@ import javax.ws.rs.core.Response;
  * This class is a REST handler for requesting general proxy information.
  */
 @NotThreadSafe
-@Api(value = "/proxy", description = "Alluxio Proxy Rest Service")
-@Path(AlluxioProxyRestServiceHandler.SERVICE_PREFIX)
+@Api(description = "Alluxio Proxy Rest Service")
+@Path("/")
 @Produces(MediaType.APPLICATION_JSON)
 public final class AlluxioProxyRestServiceHandler {
-  public static final String SERVICE_PREFIX = "proxy";
 
   // endpoints
   public static final String GET_INFO = "info";

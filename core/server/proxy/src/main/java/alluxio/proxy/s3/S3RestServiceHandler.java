@@ -72,7 +72,7 @@ import javax.ws.rs.core.Response;
  * This class is a REST handler for Amazon S3 API.
  */
 @NotThreadSafe
-@Path(S3RestServiceHandler.SERVICE_PREFIX)
+@Path("/")
 @Produces(MediaType.APPLICATION_XML)
 @Consumes({ MediaType.TEXT_XML, MediaType.APPLICATION_XML, MediaType.APPLICATION_OCTET_STREAM })
 public final class S3RestServiceHandler {

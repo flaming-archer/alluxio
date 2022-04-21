@@ -11,7 +11,6 @@
 
 package alluxio.proxy;
 
-import alluxio.Constants;
 import alluxio.conf.PropertyKey;
 import alluxio.conf.ServerConfiguration;
 import alluxio.util.CommonUtils;
@@ -25,7 +24,7 @@ import org.apache.commons.io.IOUtils;
 import org.apache.http.HttpResponse;
 import org.apache.http.HttpStatus;
 import org.apache.http.client.HttpClient;
-import org.apache.http.client.methods.HttpPost;
+import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.HttpClientBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -102,10 +101,9 @@ public final class AlluxioProxyProcess implements ProxyProcess {
           return false;
         }
         HttpClient client = HttpClientBuilder.create().build();
-        HttpPost method = new HttpPost(String
-            .format("http://%s:%d%s/%s/%s/%s", mWebServer.getBindHost(), mWebServer.getLocalPort(),
-                Constants.REST_API_PREFIX, PathsRestServiceHandler.SERVICE_PREFIX, "%2f",
-                PathsRestServiceHandler.EXISTS));
+        HttpGet method = new HttpGet(String
+            .format("http://%s:%d%s", mWebServer.getBindHost(), mWebServer.getLocalPort(),
+            RestServicePrefix.ROOT_PREFIX));
         try {
           HttpResponse response = client.execute(method);
           if (response.getStatusLine().getStatusCode() == HttpStatus.SC_OK) {

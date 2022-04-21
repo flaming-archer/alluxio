@@ -11,13 +11,14 @@
 
 package alluxio.web;
 
-import alluxio.Constants;
 import alluxio.StreamCache;
 import alluxio.client.file.FileSystem;
+import alluxio.conf.AlluxioConfiguration;
 import alluxio.conf.InstancedConfiguration;
 import alluxio.conf.PropertyKey;
 import alluxio.conf.ServerConfiguration;
 import alluxio.proxy.ProxyProcess;
+import alluxio.proxy.RestServicePrefix;
 import alluxio.proxy.s3.CompleteMultipartUploadHandler;
 import alluxio.util.io.PathUtils;
 
@@ -26,6 +27,7 @@ import org.glassfish.jersey.server.ResourceConfig;
 import org.glassfish.jersey.servlet.ServletContainer;
 
 import java.net.InetSocketAddress;
+import java.util.List;
 import javax.annotation.concurrent.NotThreadSafe;
 import javax.servlet.ServletException;
 
@@ -39,10 +41,13 @@ public final class ProxyWebServer extends WebServer {
   public static final String FILE_SYSTEM_SERVLET_RESOURCE_KEY = "File System";
   public static final String STREAM_CACHE_SERVLET_RESOURCE_KEY = "Stream Cache";
   public static final String SERVER_CONFIGURATION_RESOURCE_KEY = "Server Configuration";
+  public static final String BASE_PACKAGE = "alluxio.proxy";
 
   private FileSystem mFileSystem;
 
   private InstancedConfiguration mSConf;
+
+  private RestServicePrefix mServicePrefix;
 
   /**
    * Creates a new instance of {@link ProxyWebServer}.
@@ -55,13 +60,38 @@ public final class ProxyWebServer extends WebServer {
       final ProxyProcess proxyProcess) {
     super(serviceName, address);
 
-    // REST configuration
-    ResourceConfig config = new ResourceConfig().packages("alluxio.proxy", "alluxio.proxy.s3")
-        .register(JacksonProtobufObjectMapperProvider.class);
-
     mSConf = ServerConfiguration.global();
     mFileSystem = FileSystem.Factory.create(mSConf);
 
+    initRestServiceInfo(mSConf);
+
+    mServicePrefix.registerService((restType, prefix) -> {
+      ServletHolder servletHolder = getServlet(restType, proxyProcess);
+      mServletContextHandler
+          .addServlet(servletHolder, PathUtils.concatPath(prefix, "*"));
+    });
+
+    addHandler(new CompleteMultipartUploadHandler(mFileSystem));
+  }
+
+  public void initRestServiceInfo(AlluxioConfiguration conf) {
+    List<String> proxyServices = conf.getList(PropertyKey.PROXY_REST_HANDLER, ",");
+    mServicePrefix = (proxyServices.size() == 0
+        ? new RestServicePrefix() : new RestServicePrefix(false));
+    for (int i = 0; i < proxyServices.size(); i++) {
+      String restTypeName = proxyServices.get(i);
+      String value = null;
+      if (conf.isSet(PropertyKey.Template.PROXY_REST_PREFIX.format(restTypeName))) {
+        value = conf.get(PropertyKey.Template.PROXY_REST_PREFIX.format(restTypeName));
+        mServicePrefix.put(restTypeName, value);
+      }
+    }
+  }
+
+  public ServletHolder getServlet(String restType, ProxyProcess proxyProcess) {
+    ResourceConfig config = new ResourceConfig()
+        .packages(String.format("%s.%s", BASE_PACKAGE, restType))
+        .register(JacksonProtobufObjectMapperProvider.class);
     ServletContainer servlet = new ServletContainer(config) {
       private static final long serialVersionUID = 7756010860672831556L;
 
@@ -69,18 +99,14 @@ public final class ProxyWebServer extends WebServer {
       public void init() throws ServletException {
         super.init();
         getServletContext().setAttribute(ALLUXIO_PROXY_SERVLET_RESOURCE_KEY, proxyProcess);
-        getServletContext()
-            .setAttribute(FILE_SYSTEM_SERVLET_RESOURCE_KEY, mFileSystem);
+        getServletContext().setAttribute(FILE_SYSTEM_SERVLET_RESOURCE_KEY, mFileSystem);
         getServletContext().setAttribute(STREAM_CACHE_SERVLET_RESOURCE_KEY,
             new StreamCache(ServerConfiguration.getMs(PropertyKey.PROXY_STREAM_CACHE_TIMEOUT_MS)));
-        getServletContext()
-            .setAttribute(SERVER_CONFIGURATION_RESOURCE_KEY, mSConf);
+        getServletContext().setAttribute(SERVER_CONFIGURATION_RESOURCE_KEY, mSConf);
       }
     };
-    ServletHolder servletHolder = new ServletHolder("Alluxio Proxy Web Service", servlet);
-    mServletContextHandler
-        .addServlet(servletHolder, PathUtils.concatPath(Constants.REST_API_PREFIX, "*"));
-    addHandler(new CompleteMultipartUploadHandler(mFileSystem));
+    ServletHolder servletHolder = new ServletHolder(restType, servlet);
+    return servletHolder;
   }
 
   @Override

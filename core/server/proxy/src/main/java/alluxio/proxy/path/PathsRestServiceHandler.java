@@ -9,7 +9,7 @@
  * See the NOTICE file distributed with this work for information regarding copyright ownership.
  */
 
-package alluxio.proxy;
+package alluxio.proxy.path;
 
 import alluxio.AlluxioURI;
 import alluxio.RestUtils;
@@ -58,12 +58,11 @@ import javax.ws.rs.core.Response;
  * This class is a REST handler for path resources.
  */
 @NotThreadSafe
-@Api(value = "/paths", description = "RESTful gateway for Alluxio Filesystem Client (Metadata)")
-@Path(PathsRestServiceHandler.SERVICE_PREFIX)
+@Api(description = "RESTful gateway for Alluxio Filesystem Client (Metadata)")
+@Path("/")
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
 public final class PathsRestServiceHandler {
-  public static final String SERVICE_PREFIX = "paths";
 
   public static final String PATH_PARAM = "{path:.*}/";
 

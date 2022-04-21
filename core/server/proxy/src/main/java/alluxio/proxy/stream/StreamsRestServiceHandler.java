@@ -9,7 +9,7 @@
  * See the NOTICE file distributed with this work for information regarding copyright ownership.
  */
 
-package alluxio.proxy;
+package alluxio.proxy.stream;
 
 import alluxio.RestUtils;
 import alluxio.StreamCache;
@@ -38,12 +38,11 @@ import javax.ws.rs.core.Response;
  * This class is a REST handler for stream resources.
  */
 @NotThreadSafe
-@Api(value = "/streams", description = "RESTful gateway for Alluxio Filesystem Client (Data)")
-@Path(StreamsRestServiceHandler.SERVICE_PREFIX)
+@Api(description = "RESTful gateway for Alluxio Filesystem Client (Data)")
+@Path("/")
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
 public final class StreamsRestServiceHandler {
-  public static final String SERVICE_PREFIX = "streams";
 
   public static final String ID_PARAM = "{id}/";
 

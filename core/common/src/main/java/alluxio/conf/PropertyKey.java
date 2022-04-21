@@ -4048,6 +4048,13 @@ public final class PropertyKey implements Comparable<PropertyKey> {
           .setConsistencyCheckLevel(ConsistencyCheckLevel.IGNORE)
           .setScope(Scope.NONE)
           .build();
+  public static final PropertyKey PROXY_REST_HANDLER =
+      new Builder(Name.PROXY_REST_HANDLER)
+          .setDefaultValue("s3")
+          .setDescription("Proxy rest handler to be enabled")
+          .setConsistencyCheckLevel(ConsistencyCheckLevel.ENFORCE)
+          .setScope(Scope.ALL)
+          .build();
 
   //
   // Locality related properties
@@ -6869,6 +6876,7 @@ public final class PropertyKey implements Comparable<PropertyKey> {
     public static final String PROXY_WEB_BIND_HOST = "alluxio.proxy.web.bind.host";
     public static final String PROXY_WEB_HOSTNAME = "alluxio.proxy.web.hostname";
     public static final String PROXY_WEB_PORT = "alluxio.proxy.web.port";
+    public static final String PROXY_REST_HANDLER = "alluxio.proxy.rest.handler";
 
     //
     // Locality related properties
@@ -7475,6 +7483,8 @@ public final class PropertyKey implements Comparable<PropertyKey> {
         "alluxio\\.(\\w+)\\.rpc\\.executor\\.fjp\\.min\\.runnable"),
     RPC_EXECUTOR_FJP_ASYNC("alluxio.%s.rpc.executor.fjp.async",
         "alluxio\\.(\\w+)\\.rpc\\.executor\\.fjp\\.async"),
+
+    PROXY_REST_PREFIX("alluxio.proxy.rest.%s.prefix", "alluxio\\.proxy\\.rest\\.(\\w+)\\.prefix"),
 
     /**
      * @deprecated This template is always deprecated. It is used only for testing.

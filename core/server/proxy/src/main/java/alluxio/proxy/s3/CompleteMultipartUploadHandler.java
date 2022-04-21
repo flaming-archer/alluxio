@@ -12,7 +12,6 @@
 package alluxio.proxy.s3;
 
 import alluxio.AlluxioURI;
-import alluxio.Constants;
 import alluxio.client.file.FileInStream;
 import alluxio.client.file.FileOutStream;
 import alluxio.client.file.FileSystem;
@@ -21,6 +20,7 @@ import alluxio.conf.PropertyKey;
 import alluxio.conf.ServerConfiguration;
 import alluxio.grpc.CreateFilePOptions;
 import alluxio.grpc.DeletePOptions;
+import alluxio.proxy.RestServicePrefix;
 
 import com.fasterxml.jackson.dataformat.xml.XmlMapper;
 import com.google.common.io.ByteStreams;
@@ -49,8 +49,7 @@ import java.util.concurrent.Callable;
 public class CompleteMultipartUploadHandler extends AbstractHandler {
   private static final Logger LOG = LoggerFactory.getLogger(CompleteMultipartUploadHandler.class);
 
-  private final String mS3Prefix = Constants.REST_API_PREFIX + AlluxioURI.SEPARATOR
-      + S3RestServiceHandler.SERVICE_PREFIX + AlluxioURI.SEPARATOR;
+  private String mS3Prefix = "/";
 
   private final FileSystem mFileSystem;
   private final ExecutorService mExecutor;
@@ -66,6 +65,14 @@ public class CompleteMultipartUploadHandler extends AbstractHandler {
         PropertyKey.PROXY_S3_COMPLETE_MULTIPART_UPLOAD_POOL_SIZE));
     mKeepAliveTime = ServerConfiguration.getMs(
         PropertyKey.PROXY_S3_COMPLETE_MULTIPART_UPLOAD_KEEPALIVE_TIME_INTERVAL);
+    if (ServerConfiguration.isSet(
+        PropertyKey.Template.PROXY_REST_PREFIX.format(RestServicePrefix.PROXY_S3_REST))) {
+      mS3Prefix = ServerConfiguration.get(
+          PropertyKey.Template.PROXY_REST_PREFIX.format(RestServicePrefix.PROXY_S3_REST));
+      if (mS3Prefix.length() > 1) {
+        mS3Prefix = mS3Prefix + AlluxioURI.SEPARATOR;
+      }
+    }
   }
 
   /**
