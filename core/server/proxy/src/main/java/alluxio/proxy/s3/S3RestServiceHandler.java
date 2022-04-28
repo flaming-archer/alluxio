@@ -28,9 +28,6 @@ import alluxio.grpc.CreateDirectoryPOptions;
 import alluxio.grpc.CreateFilePOptions;
 import alluxio.grpc.DeletePOptions;
 import alluxio.grpc.ListStatusPOptions;
-import alluxio.proxy.s3.auth.Authenticator;
-import alluxio.proxy.s3.auth.AwsAuthInfo;
-import alluxio.proxy.s3.signature.AwsSignatureProcessor;
 import alluxio.security.User;
 import alluxio.web.ProxyWebServer;
 
@@ -67,7 +64,6 @@ import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.QueryParam;
-import javax.ws.rs.container.ContainerRequestContext;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
@@ -91,11 +87,6 @@ public final class S3RestServiceHandler {
 
   private final FileSystem mFileSystem;
   private final InstancedConfiguration mSConf;
-  private AwsSignatureProcessor mSignatureProcessor;
-  private Authenticator mAuthenticator;
-
-  @Context
-  private ContainerRequestContext mRequestContext;
 
   /**
    * Constructs a new {@link S3RestServiceHandler}.
@@ -107,37 +98,6 @@ public final class S3RestServiceHandler {
         (FileSystem) context.getAttribute(ProxyWebServer.FILE_SYSTEM_SERVLET_RESOURCE_KEY);
     mSConf = (InstancedConfiguration)
         context.getAttribute(ProxyWebServer.SERVER_CONFIGURATION_RESOURCE_KEY);
-  }
-
-  /**
-   * Get username from header info.
-   *
-   * @param authorization authorization info
-   * @return username
-   * @throws S3Exception
-   */
-  public String getUser(String authorization) throws S3Exception {
-    if (S3RestUtils.isAuthenticationEnabled(mSConf)) {
-      mSignatureProcessor = new AwsSignatureProcessor(mRequestContext);
-      mAuthenticator = Authenticator.Factory.create(mSConf);
-      return getUserFromSignature();
-    } else {
-      return getUserFromAuthorization(authorization);
-    }
-  }
-
-  /**
-   * Get username from parsed header info.
-   *
-   * @return username
-   * @throws S3Exception
-   */
-  public String getUserFromSignature() throws S3Exception {
-    AwsAuthInfo authInfo = mSignatureProcessor.getAuthInfo();
-    if (mAuthenticator.isAuthenticated(authInfo)) {
-      return authInfo.getAccessID();
-    }
-    throw new S3Exception(authInfo.toString(), S3ErrorCode.INVALID_IDENTIFIER);
   }
 
   /**
@@ -180,8 +140,8 @@ public final class S3RestServiceHandler {
     return user;
   }
 
-  private FileSystem getFileSystem(String authorization) throws S3Exception {
-    final String user = getUser(authorization);
+  private FileSystem getFileSystem(String authorization) {
+    final String user = getUserFromAuthorization(authorization);
 
     if (user == null) {
       return mFileSystem;
@@ -586,18 +546,18 @@ public final class S3RestServiceHandler {
       @QueryParam("uploadId") final Long uploadId) {
     Preconditions.checkArgument(uploads != null || uploadId != null,
         "parameter 'uploads' or 'uploadId' should exist");
+    final FileSystem fileSystem = getFileSystem(authorization);
     if (uploads != null) {
-      return initiateMultipartUpload(authorization, bucket, object);
+      return initiateMultipartUpload(fileSystem, bucket, object);
     } else {
-      return completeMultipartUpload(authorization, bucket, object, uploadId);
+      return completeMultipartUpload(fileSystem, bucket, object, uploadId);
     }
   }
 
-  private Response initiateMultipartUpload(final String authorization,
+  private Response initiateMultipartUpload(final FileSystem fs,
                                            final String bucket,
                                            final String object) {
     return S3RestUtils.call(bucket, () -> {
-      FileSystem fs = getFileSystem(authorization);
       String bucketPath = S3RestUtils.parsePath(AlluxioURI.SEPARATOR + bucket);
       S3RestUtils.checkPathIsAlluxioDirectory(fs, bucketPath);
       String objectPath = bucketPath + AlluxioURI.SEPARATOR + object;
@@ -631,12 +591,11 @@ public final class S3RestServiceHandler {
   // TODO(cc): support the options in the XML request body defined in
   // http://docs.aws.amazon.com/AmazonS3/latest/API/mpUploadComplete.html, currently, the parts
   // under the temporary multipart upload directory are combined into the final object.
-  private Response completeMultipartUpload(final String authorization,
+  private Response completeMultipartUpload(final FileSystem fs,
                                            final String bucket,
                                            final String object,
                                            final long uploadId) {
     return S3RestUtils.call(bucket, () -> {
-      FileSystem fs = getFileSystem(authorization);
       String bucketPath = S3RestUtils.parsePath(AlluxioURI.SEPARATOR + bucket);
       S3RestUtils.checkPathIsAlluxioDirectory(fs, bucketPath);
       String objectPath = bucketPath + AlluxioURI.SEPARATOR + object;
@@ -736,20 +695,21 @@ public final class S3RestServiceHandler {
     Preconditions.checkNotNull(bucket, "required 'bucket' parameter is missing");
     Preconditions.checkNotNull(object, "required 'object' parameter is missing");
 
+    final FileSystem fs = getFileSystem(authorization);
+
     if (uploadId != null) {
-      return listParts(authorization, bucket, object, uploadId);
+      return listParts(fs, bucket, object, uploadId);
     } else {
-      return getObject(authorization, bucket, object, range);
+      return getObject(fs, bucket, object, range);
     }
   }
 
   // TODO(cc): support paging during listing parts, currently, all parts are returned at once.
-  private Response listParts(final String authorization,
+  private Response listParts(final FileSystem fs,
                              final String bucket,
                              final String object,
                              final long uploadId) {
     return S3RestUtils.call(bucket, () -> {
-      FileSystem fs = getFileSystem(authorization);
       String bucketPath = S3RestUtils.parsePath(AlluxioURI.SEPARATOR + bucket);
       S3RestUtils.checkPathIsAlluxioDirectory(fs, bucketPath);
 
@@ -778,12 +738,12 @@ public final class S3RestServiceHandler {
     });
   }
 
-  private Response getObject(final String authorization,
+  private Response getObject(final FileSystem fs,
                              final String bucket,
                              final String object,
                              final String range) {
     return S3RestUtils.call(bucket, () -> {
-      FileSystem fs = getFileSystem(authorization);
+
       String bucketPath = S3RestUtils.parsePath(AlluxioURI.SEPARATOR + bucket);
       S3RestUtils.checkPathIsAlluxioDirectory(fs, bucketPath);
       String objectPath = bucketPath + AlluxioURI.SEPARATOR + object;

@@ -168,7 +168,6 @@
     <cephfs-hadoop.version>0.0.1</cephfs-hadoop.version>
     <libcephfs.version>0.0.1</libcephfs.version>
     <jnr-fuse.version>0.5.5</jnr-fuse.version>
-    <kerby.version>1.0.1</kerby.version>
   </properties>
 
   <modules>
@@ -723,11 +722,6 @@
         <artifactId>ratis-grpc</artifactId>
         <groupId>org.apache.ratis</groupId>
         <version>${ratis.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>org.apache.kerby</groupId>
-        <artifactId>kerby-util</artifactId>
-        <version>${kerby.version}</version>
       </dependency>
 
       <!-- Test scope -->
