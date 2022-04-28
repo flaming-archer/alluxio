@@ -5584,6 +5584,53 @@ public final class PropertyKey implements Comparable<PropertyKey> {
           .setDescription("the max number of rpcPassword could be cached")
           .setScope(Scope.MASTER)
           .build();
+  public static final PropertyKey S3_REST_AUTHENTICATION_ENABLED =
+      new Builder(Name.S3_REST_AUTHENTICATION_ENABLED)
+          .setDefaultValue(false)
+          .setDescription("Whether to enable check s3 rest request header.")
+          .setConsistencyCheckLevel(ConsistencyCheckLevel.ENFORCE)
+          .setScope(Scope.MASTER)
+          .build();
+  public static final PropertyKey S3_REST_AUTHENTICATOR_CLASSNAME =
+      new Builder(Name.S3_REST_AUTHENTICATOR_CLASSNAME)
+          .setDescription("The class's name is instantiated as an S3 authenticator.")
+          .setDefaultValue("alluxio.proxy.s3.auth.DefaultAuthenticator")
+          .setConsistencyCheckLevel(ConsistencyCheckLevel.ENFORCE)
+          .setScope(Scope.ALL)
+          .build();
+  public static final PropertyKey S3_REST_AUTHENTICATOR_LOCAL_PASSWORD_SERVICE_URL =
+      new Builder(Name.S3_REST_AUTHENTICATOR_LOCAL_PASSWORD_SERVICE_URL)
+          .setDescription("The service url to get password for given username")
+          .setConsistencyCheckLevel(ConsistencyCheckLevel.WARN)
+          .setScope(Scope.MASTER)
+          .build();
+  public static final PropertyKey S3_REST_AUTHENTICATOR_LOCAL_PASSWORD_SERVICE_TOKEN =
+      new Builder(Name.S3_REST_AUTHENTICATOR_LOCAL_PASSWORD_SERVICE_TOKEN)
+          .setDescription("Token used to request the service to obtain password")
+          .setConsistencyCheckLevel(ConsistencyCheckLevel.WARN)
+          .setScope(Scope.MASTER)
+          .build();
+  public static final PropertyKey S3_REST_AUTHENTICATOR_LOCAL_CACHE_REFRESH_TIMEOUT =
+      new Builder(Name.S3_REST_AUTHENTICATOR_LOCAL_CACHE_REFRESH_TIMEOUT)
+          .setDescription("The timeout for password cache in LocalAuthenticator")
+          .setConsistencyCheckLevel(ConsistencyCheckLevel.WARN)
+          .setDefaultValue(5)
+          .setScope(Scope.MASTER)
+          .build();
+  public static final PropertyKey S3_REST_AUTHENTICATOR_LOCAL_CACHE_EXPIRE_TIMEOUT =
+      new Builder(Name.S3_REST_AUTHENTICATOR_LOCAL_CACHE_EXPIRE_TIMEOUT)
+          .setDescription("Time for cached password to expire in LocalAuthenticator")
+          .setConsistencyCheckLevel(ConsistencyCheckLevel.WARN)
+          .setDefaultValue(60)
+          .setScope(Scope.MASTER)
+          .build();
+  public static final PropertyKey S3_REST_AUTHENTICATOR_LOCAL_CACHE_SIZE =
+      new Builder(Name.S3_REST_AUTHENTICATOR_LOCAL_CACHE_SIZE)
+          .setDescription("the max number of password could be cached in LocalAuthenticator")
+          .setConsistencyCheckLevel(ConsistencyCheckLevel.WARN)
+          .setDefaultValue(10000)
+          .setScope(Scope.MASTER)
+          .build();
   //
   // Network TLS support
   //
@@ -7157,10 +7204,10 @@ public final class PropertyKey implements Comparable<PropertyKey> {
     public static final String FUSE_DEBUG_ENABLED = "alluxio.fuse.debug.enabled";
     public static final String FUSE_FS_NAME = "alluxio.fuse.fs.name";
     public static final String FUSE_JNIFUSE_ENABLED = "alluxio.fuse.jnifuse.enabled";
-    public static final String FUSE_PERMISSION_CHECK_ENABLED
-        = "alluxio.fuse.permission.check.enabled";
-    public static final String FUSE_SHARED_CACHING_READER_ENABLED
-        = "alluxio.fuse.shared.caching.reader.enabled";
+    public static final String FUSE_PERMISSION_CHECK_ENABLED =
+        "alluxio.fuse.permission.check.enabled";
+    public static final String FUSE_SHARED_CACHING_READER_ENABLED =
+        "alluxio.fuse.shared.caching.reader.enabled";
     public static final String FUSE_LOGGING_THRESHOLD = "alluxio.fuse.logging.threshold";
     public static final String FUSE_MAXWRITE_BYTES = "alluxio.fuse.maxwrite.bytes";
     public static final String FUSE_UMOUNT_TIMEOUT =
@@ -7222,6 +7269,20 @@ public final class PropertyKey implements Comparable<PropertyKey> {
          "alluxio.security.rpc-password.match.cache.expire.minute";
     public static final String SECURITY_RPC_PASSWORD_MATCH_CACHE_SIZE =
          "hadoop.security.rpc-password.match.cache.size";
+    public static final String S3_REST_AUTHENTICATION_ENABLED =
+         "alluxio.s3.rest.authentication.enabled";
+    public static final String S3_REST_AUTHENTICATOR_CLASSNAME =
+         "alluxio.s3.rest.authenticator.classname";
+    public static final String S3_REST_AUTHENTICATOR_LOCAL_PASSWORD_SERVICE_URL =
+         "alluxio.s3.rest.authenticator.local.password.service.url";
+    public static final String S3_REST_AUTHENTICATOR_LOCAL_PASSWORD_SERVICE_TOKEN =
+         "alluxio.s3.rest.authenticator.local.password.service.token";
+    public static final String S3_REST_AUTHENTICATOR_LOCAL_CACHE_REFRESH_TIMEOUT =
+         "alluxio.s3.rest.authenticator.local.cache.refresh.timeout";
+    public static final String S3_REST_AUTHENTICATOR_LOCAL_CACHE_EXPIRE_TIMEOUT =
+         "alluxio.s3.rest.authenticator.local.cache.expire.timeout";
+    public static final String S3_REST_AUTHENTICATOR_LOCAL_CACHE_SIZE =
+         "alluxio.s3.rest.authenticator.local.cache.size";
 
     //
     // Network TLS support
