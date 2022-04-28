@@ -5584,6 +5584,20 @@ public final class PropertyKey implements Comparable<PropertyKey> {
           .setDescription("the max number of rpcPassword could be cached")
           .setScope(Scope.MASTER)
           .build();
+  public static final PropertyKey S3_REST_AUTHENTICATION_ENABLED =
+      new Builder(Name.S3_REST_AUTHENTICATION_ENABLED)
+          .setDefaultValue(false)
+          .setDescription("Whether to enable check s3 rest request header.")
+          .setConsistencyCheckLevel(ConsistencyCheckLevel.ENFORCE)
+          .setScope(Scope.MASTER)
+          .build();
+  public static final PropertyKey S3_REST_AUTHENTICATOR_CLASSNAME =
+      new Builder(Name.S3_REST_AUTHENTICATOR_CLASSNAME)
+          .setDescription("The class's name is instantiated as an S3 authenticator.")
+          .setDefaultValue("alluxio.proxy.s3.auth.DefaultAuthenticator")
+          .setConsistencyCheckLevel(ConsistencyCheckLevel.ENFORCE)
+          .setScope(Scope.ALL)
+          .build();
   //
   // Network TLS support
   //
@@ -7157,10 +7171,10 @@ public final class PropertyKey implements Comparable<PropertyKey> {
     public static final String FUSE_DEBUG_ENABLED = "alluxio.fuse.debug.enabled";
     public static final String FUSE_FS_NAME = "alluxio.fuse.fs.name";
     public static final String FUSE_JNIFUSE_ENABLED = "alluxio.fuse.jnifuse.enabled";
-    public static final String FUSE_PERMISSION_CHECK_ENABLED
-        = "alluxio.fuse.permission.check.enabled";
-    public static final String FUSE_SHARED_CACHING_READER_ENABLED
-        = "alluxio.fuse.shared.caching.reader.enabled";
+    public static final String FUSE_PERMISSION_CHECK_ENABLED =
+        "alluxio.fuse.permission.check.enabled";
+    public static final String FUSE_SHARED_CACHING_READER_ENABLED =
+        "alluxio.fuse.shared.caching.reader.enabled";
     public static final String FUSE_LOGGING_THRESHOLD = "alluxio.fuse.logging.threshold";
     public static final String FUSE_MAXWRITE_BYTES = "alluxio.fuse.maxwrite.bytes";
     public static final String FUSE_UMOUNT_TIMEOUT =
@@ -7222,6 +7236,10 @@ public final class PropertyKey implements Comparable<PropertyKey> {
          "alluxio.security.rpc-password.match.cache.expire.minute";
     public static final String SECURITY_RPC_PASSWORD_MATCH_CACHE_SIZE =
          "hadoop.security.rpc-password.match.cache.size";
+    public static final String S3_REST_AUTHENTICATION_ENABLED =
+         "alluxio.s3.rest.authentication.enabled";
+    public static final String S3_REST_AUTHENTICATOR_CLASSNAME =
+         "alluxio.s3.rest.authenticator.classname";
 
     //
     // Network TLS support
