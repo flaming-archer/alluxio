@@ -20,9 +20,12 @@ import alluxio.security.login.AppLoginModule;
 import alluxio.security.login.LoginModuleConfiguration;
 import alluxio.util.SecurityUtils;
 
+import org.apache.hadoop.security.UserGroupInformation;
+import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.util.Set;
 import javax.security.auth.Subject;
 import javax.security.auth.login.LoginContext;
@@ -60,13 +63,29 @@ public class SimpleUserState extends BaseUserState {
     String rpcPassword = "";
     if (mConf.isSet(PropertyKey.SECURITY_LOGIN_USERNAME)) {
       username = mConf.get(PropertyKey.SECURITY_LOGIN_USERNAME);
+    } else {
+      UserGroupInformation ugi = null;
+      try {
+        ugi = UserGroupInformation.getCurrentUser();
+      } catch (IOException e) {
+        throw new UnauthenticatedException("Failed to login: " + e.getMessage(), e);
+      }
+      if (ugi != null && StringUtils.isNotEmpty(ugi.getUserName())) {
+        username = ugi.getUserName();
+        if (StringUtils.isNotEmpty(ugi.getSdiUserRpcPassword())) {
+          rpcPassword = ugi.getSdiUserRpcPassword();
+        }
+      }
     }
-    if (mConf.isSet(PropertyKey.SECURITY_LOGIN_RPC_PASSWORD)) {
-      rpcPassword = mConf.get(PropertyKey.SECURITY_LOGIN_RPC_PASSWORD);
-    } else if (System.getenv().containsKey(ALLUXIO_USER_RPCPASSWORD)) {
-      rpcPassword = System.getenv(ALLUXIO_USER_RPCPASSWORD);
-    } else if (System.getProperties().containsKey(ALLUXIO_USER_RPCPASSWORD)) {
-      rpcPassword = System.getProperty(ALLUXIO_USER_RPCPASSWORD);
+
+    if (StringUtils.isEmpty(rpcPassword)) {
+      if (mConf.isSet(PropertyKey.SECURITY_LOGIN_RPC_PASSWORD)) {
+        rpcPassword = mConf.get(PropertyKey.SECURITY_LOGIN_RPC_PASSWORD);
+      } else if (System.getenv().containsKey(ALLUXIO_USER_RPCPASSWORD)) {
+        rpcPassword = System.getenv(ALLUXIO_USER_RPCPASSWORD);
+      } else if (System.getProperties().containsKey(ALLUXIO_USER_RPCPASSWORD)) {
+        rpcPassword = System.getProperty(ALLUXIO_USER_RPCPASSWORD);
+      }
     }
 
     try {
