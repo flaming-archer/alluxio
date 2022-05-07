@@ -4055,6 +4055,39 @@ public final class PropertyKey implements Comparable<PropertyKey> {
           .setConsistencyCheckLevel(ConsistencyCheckLevel.ENFORCE)
           .setScope(Scope.ALL)
           .build();
+  public static final PropertyKey S3_REST_AUTHENTICATOR_RAM_PASSWORD_SERVICE_URL =
+      new Builder(Name.S3_REST_AUTHENTICATOR_RAM_PASSWORD_SERVICE_URL)
+          .setDescription("The service url to get password for given username")
+          .setConsistencyCheckLevel(ConsistencyCheckLevel.WARN)
+          .setScope(Scope.SERVER)
+          .build();
+  public static final PropertyKey S3_REST_AUTHENTICATOR_RAM_PASSWORD_SERVICE_TOKEN =
+      new Builder(Name.S3_REST_AUTHENTICATOR_RAM_PASSWORD_SERVICE_TOKEN)
+          .setDescription("Token used to request the service to obtain password")
+          .setConsistencyCheckLevel(ConsistencyCheckLevel.WARN)
+          .setScope(Scope.SERVER)
+          .build();
+  public static final PropertyKey S3_REST_AUTHENTICATOR_RAM_CACHE_REFRESH_TIMEOUT =
+      new Builder(Name.S3_REST_AUTHENTICATOR_RAM_CACHE_REFRESH_TIMEOUT)
+          .setDescription("The timeout for password cache in BasedOnRAMAuthenticator")
+          .setConsistencyCheckLevel(ConsistencyCheckLevel.WARN)
+          .setDefaultValue(5)
+          .setScope(Scope.SERVER)
+          .build();
+  public static final PropertyKey S3_REST_AUTHENTICATOR_RAM_CACHE_EXPIRE_TIMEOUT =
+      new Builder(Name.S3_REST_AUTHENTICATOR_RAM_CACHE_EXPIRE_TIMEOUT)
+          .setDescription("Time for cached password to expire in BasedOnRAMAuthenticator")
+          .setConsistencyCheckLevel(ConsistencyCheckLevel.WARN)
+          .setDefaultValue(60)
+          .setScope(Scope.SERVER)
+          .build();
+  public static final PropertyKey S3_REST_AUTHENTICATOR_RAM_CACHE_SIZE =
+      new Builder(Name.S3_REST_AUTHENTICATOR_RAM_CACHE_SIZE)
+          .setDescription("the max number of password could be cached in BasedOnRAMAuthenticator")
+          .setConsistencyCheckLevel(ConsistencyCheckLevel.WARN)
+          .setDefaultValue(10000)
+          .setScope(Scope.SERVER)
+          .build();
 
   //
   // Locality related properties
@@ -6891,6 +6924,17 @@ public final class PropertyKey implements Comparable<PropertyKey> {
     public static final String PROXY_WEB_HOSTNAME = "alluxio.proxy.web.hostname";
     public static final String PROXY_WEB_PORT = "alluxio.proxy.web.port";
     public static final String PROXY_REST_HANDLER = "alluxio.proxy.rest.handler";
+
+    public static final String S3_REST_AUTHENTICATOR_RAM_PASSWORD_SERVICE_URL =
+        "alluxio.s3.rest.authenticator.ram.password.service.url";
+    public static final String S3_REST_AUTHENTICATOR_RAM_PASSWORD_SERVICE_TOKEN =
+        "alluxio.s3.rest.authenticator.ram.password.service.token";
+    public static final String S3_REST_AUTHENTICATOR_RAM_CACHE_REFRESH_TIMEOUT =
+        "alluxio.s3.rest.authenticator.ram.cache.refresh.timeout";
+    public static final String S3_REST_AUTHENTICATOR_RAM_CACHE_EXPIRE_TIMEOUT =
+        "alluxio.s3.rest.authenticator.ram.cache.expire.timeout";
+    public static final String S3_REST_AUTHENTICATOR_RAM_CACHE_SIZE =
+        "alluxio.s3.rest.authenticator.ram.cache.size";
 
     //
     // Locality related properties
