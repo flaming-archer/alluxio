@@ -76,14 +76,18 @@ public final class ProxyWebServer extends WebServer {
 
   public void initRestServiceInfo(AlluxioConfiguration conf) {
     List<String> proxyServices = conf.getList(PropertyKey.PROXY_REST_HANDLER, ",");
-    mServicePrefix = (proxyServices.size() == 0
-        ? new RestServicePrefix() : new RestServicePrefix(false));
-    for (int i = 0; i < proxyServices.size(); i++) {
-      String restTypeName = proxyServices.get(i);
-      String value = null;
-      if (conf.isSet(PropertyKey.Template.PROXY_REST_PREFIX.format(restTypeName))) {
-        value = conf.get(PropertyKey.Template.PROXY_REST_PREFIX.format(restTypeName));
-        mServicePrefix.put(restTypeName, value);
+    if (proxyServices.size() == 1 && "s3".equals(proxyServices.get(0))
+        && !conf.isSet(PropertyKey.Template.PROXY_REST_PREFIX.format("s3"))) {
+      mServicePrefix = new RestServicePrefix();
+    } else {
+      mServicePrefix = new RestServicePrefix(false);
+      for (int i = 0; i < proxyServices.size(); i++) {
+        String restTypeName = proxyServices.get(i);
+        String value = null;
+        if (conf.isSet(PropertyKey.Template.PROXY_REST_PREFIX.format(restTypeName))) {
+          value = conf.get(PropertyKey.Template.PROXY_REST_PREFIX.format(restTypeName));
+          mServicePrefix.put(restTypeName, value);
+        }
       }
     }
   }

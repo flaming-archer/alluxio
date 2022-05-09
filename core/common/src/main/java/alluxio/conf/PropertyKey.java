@@ -4051,7 +4051,8 @@ public final class PropertyKey implements Comparable<PropertyKey> {
   public static final PropertyKey PROXY_REST_HANDLER =
       new Builder(Name.PROXY_REST_HANDLER)
           .setDefaultValue("s3")
-          .setDescription("Proxy rest handler to be enabled")
+          .setDescription("Proxy rest handlers to be enabled. Currently options "
+              + "include s3, path, stream and proxy.")
           .setConsistencyCheckLevel(ConsistencyCheckLevel.ENFORCE)
           .setScope(Scope.ALL)
           .build();
