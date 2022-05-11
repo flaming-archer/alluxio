@@ -28,10 +28,11 @@ public class TestAWSV4Authenticator {
       return AuthorizationV4Validator.validateRequest(
           authInfo.getStringTosSign(),
           authInfo.getSignature(),
-          getSecret());
+          getPassword(authInfo.getAccessID()));
     }
 
-    private String getSecret() {
+    @Override
+    public String getPassword(String username) throws S3Exception {
       return "testpassword";
     }
   }

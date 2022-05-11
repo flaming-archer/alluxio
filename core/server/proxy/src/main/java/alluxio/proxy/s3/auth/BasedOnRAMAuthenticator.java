@@ -13,6 +13,7 @@ package alluxio.proxy.s3.auth;
 
 import alluxio.conf.AlluxioConfiguration;
 import alluxio.conf.PropertyKey;
+import alluxio.proxy.s3.S3ErrorCode;
 import alluxio.proxy.s3.S3Exception;
 import alluxio.proxy.s3.signature.AuthorizationV4Validator;
 
@@ -64,7 +65,7 @@ public class BasedOnRAMAuthenticator implements Authenticator {
     loader = new CacheLoader<String, String>() {
       @Override
       public String load(String username) throws Exception {
-        return getPassword(username);
+        return getPasswordForCache(username);
       }
     };
     mCache = CacheBuilder.newBuilder()
@@ -76,19 +77,24 @@ public class BasedOnRAMAuthenticator implements Authenticator {
 
   @Override
   public boolean isAuthenticated(AwsAuthInfo authInfo) throws S3Exception {
-    String password = null;
-    try {
-      password = mCache.get(authInfo.getAccessID());
-    } catch (ExecutionException e) {
-      LOG.error("Error from loading cache: " + e.getMessage());
-    }
+    String password = getPassword(authInfo.getAccessID());
     return AuthorizationV4Validator.validateRequest(
             authInfo.getStringTosSign(),
             authInfo.getSignature(),
             password);
   }
 
-  private String getPassword(String userName) {
+  @Override
+  public String getPassword(String username) throws S3Exception {
+    try {
+      return mCache.get(username);
+    } catch (ExecutionException e) {
+      LOG.error("Error from loading cache: " + e.getMessage());
+      throw new S3Exception("Failed to get password", S3ErrorCode.INTERNAL_ERROR);
+    }
+  }
+
+  private String getPasswordForCache(String userName) {
     BufferedReader in = null;
     try {
       URL url = new URL(mPasswordServiceUrl + userName);

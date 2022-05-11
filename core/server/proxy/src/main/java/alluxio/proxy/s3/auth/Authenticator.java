@@ -56,4 +56,6 @@ public interface Authenticator {
    * @throws alluxio.proxy.s3.S3Exception
    */
   boolean isAuthenticated(AwsAuthInfo authInfo) throws S3Exception;
+
+  public String getPassword(String userName) throws S3Exception;
 }

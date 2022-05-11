@@ -126,6 +126,13 @@ public final class S3RestServiceHandler {
     }
   }
 
+  public String getPassword(String userName) throws S3Exception {
+    if (S3RestUtils.isAuthenticationEnabled(mSConf)) {
+      return mAuthenticator.getPassword(userName);
+    }
+    return null;
+  }
+
   /**
    * Get username from parsed header info.
    *
@@ -186,9 +193,12 @@ public final class S3RestServiceHandler {
     if (user == null) {
       return mFileSystem;
     }
-
+    String password = getPassword(user);
     final Subject subject = new Subject();
     subject.getPrincipals().add(new User(user));
+    if (password != null) {
+      subject.getPrivateCredentials().add(password);
+    }
     return FileSystem.Factory.get(subject, mSConf);
   }
 

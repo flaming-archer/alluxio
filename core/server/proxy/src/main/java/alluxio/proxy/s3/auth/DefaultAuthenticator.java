@@ -29,4 +29,9 @@ public class DefaultAuthenticator implements Authenticator {
   public boolean isAuthenticated(AwsAuthInfo authInfo) throws S3Exception {
     return true;
   }
+
+  @Override
+  public String getPassword(String userName) throws S3Exception {
+    return null;
+  }
 }
