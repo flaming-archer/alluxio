@@ -53,6 +53,19 @@
     <version>7</version>
   </parent>
 
+  <distributionManagement>
+    <repository>
+      <id>${distMgmtStagingId}</id>
+      <name>${distMgmtStagingName}</name>
+      <url>${distMgmtStagingUrl}</url>
+    </repository>
+    <snapshotRepository>
+      <id>${distMgmtSnapshotsId}</id>
+      <name>${distMgmtSnapshotsName}</name>
+      <url>${distMgmtSnapshotsUrl}</url>
+    </snapshotRepository>
+  </distributionManagement>
+
   <repositories>
     <repository>
       <id>central</id>
@@ -169,6 +182,12 @@
     <libcephfs.version>0.0.1</libcephfs.version>
     <jnr-fuse.version>0.5.5</jnr-fuse.version>
     <kerby.version>1.0.1</kerby.version>
+    <distMgmtSnapshotsId>data-infra-snapshot</distMgmtSnapshotsId>
+    <distMgmtSnapshotsName>Shopee Data Infra Snapshot Repository</distMgmtSnapshotsName>
+    <distMgmtSnapshotsUrl>https://di-nexus-repo.idata.shopeemobile.com/repository/maven-snapshot/</distMgmtSnapshotsUrl>
+    <distMgmtStagingId>data-infra-release</distMgmtStagingId>
+    <distMgmtStagingName>Shopee Data Infra Release Repository</distMgmtStagingName>
+    <distMgmtStagingUrl>https://di-nexus-repo.idata.shopeemobile.com/repository/maven-release/</distMgmtStagingUrl>
   </properties>
 
   <modules>
