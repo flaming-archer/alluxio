@@ -31,6 +31,7 @@ import alluxio.grpc.ListStatusPOptions;
 import alluxio.proxy.s3.auth.Authenticator;
 import alluxio.proxy.s3.auth.AwsAuthInfo;
 import alluxio.proxy.s3.signature.AwsSignatureProcessor;
+import alluxio.security.CurrentUser;
 import alluxio.security.User;
 import alluxio.web.ProxyWebServer;
 
@@ -193,11 +194,18 @@ public final class S3RestServiceHandler {
     if (user == null) {
       return mFileSystem;
     }
-    String password = getPassword(user);
     final Subject subject = new Subject();
-    subject.getPrincipals().add(new User(user));
-    if (password != null) {
-      subject.getPrivateCredentials().add(password);
+
+    if (mSConf.getBoolean(PropertyKey.S3_REST_IMPERSONATE_ENABLED)) {
+      String impersonationUser = mSConf.get(PropertyKey.S3_REST_IMPERSONATION_USERNAME);
+      subject.getPrincipals().add(new CurrentUser(user));
+      subject.getPrincipals().add(new User(impersonationUser));
+    } else {
+      subject.getPrincipals().add(new User(user));
+      String password = getPassword(user);
+      if (password != null) {
+        subject.getPrivateCredentials().add(password);
+      }
     }
     return FileSystem.Factory.get(subject, mSConf);
   }

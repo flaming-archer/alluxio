@@ -5681,6 +5681,20 @@ public final class PropertyKey implements Comparable<PropertyKey> {
           .setConsistencyCheckLevel(ConsistencyCheckLevel.ENFORCE)
           .setScope(Scope.ALL)
           .build();
+  public static final PropertyKey S3_REST_IMPERSONATE_ENABLED =
+      new Builder(Name.S3_REST_IMPERSONATE_ENABLED)
+          .setDescription("Whether to enable use impersonate for proxy service.")
+          .setDefaultValue(false)
+          .setConsistencyCheckLevel(ConsistencyCheckLevel.ENFORCE)
+          .setScope(Scope.SERVER)
+          .build();
+  public static final PropertyKey S3_REST_IMPERSONATION_USERNAME =
+      new Builder(Name.S3_REST_IMPERSONATION_USERNAME)
+          .setDescription("Impersonation username for proxy service.")
+          .setDefaultValue("alluxio")
+          .setConsistencyCheckLevel(ConsistencyCheckLevel.ENFORCE)
+          .setScope(Scope.CLIENT)
+          .build();
   //
   // Network TLS support
   //
@@ -7342,6 +7356,11 @@ public final class PropertyKey implements Comparable<PropertyKey> {
          "alluxio.s3.rest.authentication.enabled";
     public static final String S3_REST_AUTHENTICATOR_CLASSNAME =
          "alluxio.s3.rest.authenticator.classname";
+    public static final String S3_REST_IMPERSONATE_ENABLED =
+         "alluxio.s3.rest.impersonation.enabled";
+    public static final String S3_REST_IMPERSONATION_USERNAME =
+         "alluxio.s3.rest.impersonation.username";
+
 
     //
     // Network TLS support
