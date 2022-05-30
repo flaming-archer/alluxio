@@ -7361,7 +7361,6 @@ public final class PropertyKey implements Comparable<PropertyKey> {
     public static final String S3_REST_IMPERSONATION_USERNAME =
          "alluxio.s3.rest.impersonation.username";
 
-
     //
     // Network TLS support
     //
