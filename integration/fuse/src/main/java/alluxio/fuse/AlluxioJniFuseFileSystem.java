@@ -31,6 +31,7 @@ import alluxio.fuse.auth.AuthPolicy;
 import alluxio.fuse.auth.AuthPolicyFactory;
 import alluxio.grpc.CreateDirectoryPOptions;
 import alluxio.grpc.CreateFilePOptions;
+import alluxio.grpc.DeletePOptions;
 import alluxio.grpc.SetAttributePOptions;
 import alluxio.jnifuse.AbstractFuseFileSystem;
 import alluxio.jnifuse.ErrorCodes;
@@ -690,9 +691,9 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
    */
   private int rmInternal(String path) {
     final AlluxioURI uri = mPathResolverCache.getUnchecked(path);
-
+    DeletePOptions options = DeletePOptions.newBuilder().setUnchecked(true).build();
     try {
-      mFileSystem.delete(uri);
+      mFileSystem.delete(uri, options);
     } catch (Throwable t) {
       LOG.error("Failed to delete {}", path, t);
       return -ErrorCodes.EIO();
