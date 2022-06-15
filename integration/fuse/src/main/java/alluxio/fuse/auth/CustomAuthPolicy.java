@@ -17,10 +17,13 @@ import alluxio.conf.AlluxioConfiguration;
 import alluxio.conf.PropertyKey;
 import alluxio.grpc.SetAttributePOptions;
 import alluxio.jnifuse.AbstractFuseFileSystem;
+import alluxio.security.User;
 
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import javax.security.auth.Subject;
 
 /**
  * A Fuse authentication policy supports user-defined user and group.
@@ -45,7 +48,7 @@ public class CustomAuthPolicy implements AuthPolicy {
   }
 
   @Override
-  public void setUserGroupIfNeeded(AlluxioURI uri) throws Exception {
+  public void setUserGroupIfNeeded(FileSystem fileSystem, AlluxioURI uri) throws Exception {
     if (StringUtils.isEmpty(mUname) || StringUtils.isEmpty(mGname)) {
       return;
     }
@@ -53,7 +56,14 @@ public class CustomAuthPolicy implements AuthPolicy {
         .setGroup(mGname)
         .setOwner(mUname)
         .build();
-    mFileSystem.setAttribute(uri, attributeOptions);
+    fileSystem.setAttribute(uri, attributeOptions);
     LOG.debug("Set attributes of path {} to {}", uri, attributeOptions);
+  }
+
+  @Override
+  public FileSystem getFileSystemByUser(AlluxioConfiguration conf) throws Exception {
+    Subject subject = new Subject();
+    subject.getPrincipals().add(new User(mUname));
+    return FileSystem.Factory.get(subject, conf);
   }
 }

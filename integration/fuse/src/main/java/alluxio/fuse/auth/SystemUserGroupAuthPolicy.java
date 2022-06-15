@@ -19,12 +19,16 @@ import alluxio.fuse.AlluxioFuseUtils;
 import alluxio.grpc.SetAttributePOptions;
 import alluxio.jnifuse.AbstractFuseFileSystem;
 import alluxio.jnifuse.struct.FuseContext;
+import alluxio.security.CurrentUser;
 
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
+import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import javax.security.auth.Subject;
 
 /**
  * Default Fuse Auth Policy.
@@ -68,8 +72,22 @@ public final class SystemUserGroupAuthPolicy implements AuthPolicy {
     mIsUserGroupTranslation = conf.getBoolean(PropertyKey.FUSE_USER_GROUP_TRANSLATION_ENABLED);
   }
 
+  public FileSystem getFileSystemByUser(AlluxioConfiguration conf) throws Exception {
+    FuseContext fc = mFuseFileSystem.getContext();
+    if (!mIsUserGroupTranslation) {
+      return mFileSystem;
+    }
+    final Subject subject = new Subject();
+    long uid = fc.uid.get();
+    String currentUser = mUsernameCache.get(uid);
+    if (StringUtils.isNotEmpty(currentUser)) {
+      subject.getPrincipals().add(new CurrentUser(currentUser));
+    }
+    return FileSystem.Factory.get(subject, conf);
+  }
+
   @Override
-  public void setUserGroupIfNeeded(AlluxioURI uri) throws Exception {
+  public void setUserGroupIfNeeded(FileSystem fileSystem, AlluxioURI uri) throws Exception {
     FuseContext fc = mFuseFileSystem.getContext();
     if (!mIsUserGroupTranslation) {
       return;
@@ -100,6 +118,6 @@ public final class SystemUserGroupAuthPolicy implements AuthPolicy {
         .setOwner(userName)
         .build();
     LOG.debug("Set attributes of path {} to {}", uri, attributeOptions);
-    mFileSystem.setAttribute(uri, attributeOptions);
+    fileSystem.setAttribute(uri, attributeOptions);
   }
 }

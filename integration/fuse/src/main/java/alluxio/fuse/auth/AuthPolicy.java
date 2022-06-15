@@ -12,6 +12,8 @@
 package alluxio.fuse.auth;
 
 import alluxio.AlluxioURI;
+import alluxio.client.file.FileSystem;
+import alluxio.conf.AlluxioConfiguration;
 
 /**
  * Fuse Auth Policy Interface.
@@ -20,7 +22,16 @@ public interface AuthPolicy {
   /**
    * Sets user and group if needed.
    *
+   * @param fileSystem the file system
    * @param uri the path uri
    */
-  void setUserGroupIfNeeded(AlluxioURI uri) throws Exception;
+  void setUserGroupIfNeeded(FileSystem fileSystem, AlluxioURI uri) throws Exception;
+
+  /**
+   *
+   * @param conf the configuration
+   * @return the file system
+   * @throws Exception
+   */
+  FileSystem getFileSystemByUser(AlluxioConfiguration conf) throws Exception;
 }

@@ -220,14 +220,15 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
       return -ErrorCodes.ENAMETOOLONG();
     }
     try {
-      FileOutStream os = mFileSystem.createFile(uri,
+      FileSystem fileSystem = mAuthPolicy.getFileSystemByUser(mConf);
+      FileOutStream os = fileSystem.createFile(uri,
           CreateFilePOptions.newBuilder()
               .setMode(new Mode((short) mode).toProto())
               .build());
       long fid = mNextOpenFileId.getAndIncrement();
       mCreateFileEntries.add(new CreateFileEntry<>(fid, path, os));
       fi.fh.set(fid);
-      mAuthPolicy.setUserGroupIfNeeded(uri);
+      mAuthPolicy.setUserGroupIfNeeded(fileSystem, uri);
     } catch (Throwable t) {
       LOG.error("Failed to create {}", path, t);
       return -ErrorCodes.EIO();
@@ -244,6 +245,7 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
   private int getattrInternal(String path, FileStat stat) {
     final AlluxioURI uri = mPathResolverCache.getUnchecked(path);
     try {
+      FileSystem fileSystem = mAuthPolicy.getFileSystemByUser(mConf);
       URIStatus status;
       // Handle special metadata cache operation
       if (mConf.getBoolean(PropertyKey.FUSE_SPECIAL_COMMAND_ENABLED)
@@ -251,7 +253,7 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
         // TODO(lu) add cache for isFuseSpecialCommand if needed
         status = mFuseShell.runCommand(uri);
       } else {
-        status = mFileSystem.getStatus(uri);
+        status = fileSystem.getStatus(uri);
       }
       long size = status.getLength();
       if (!status.isCompleted()) {
@@ -263,13 +265,13 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
             FileOutStream os = ce.getOut();
             size = os.getBytesWritten();
           }
-        } else if (!AlluxioFuseUtils.waitForFileCompleted(mFileSystem, uri)) {
+        } else if (!AlluxioFuseUtils.waitForFileCompleted(fileSystem, uri)) {
           // Always block waiting for file to be completed except when the file is writing
           // We do not want to block the writing process
           LOG.error("File {} is not completed", path);
         } else {
           // Update the file status after waiting
-          status = mFileSystem.getStatus(uri);
+          status = fileSystem.getStatus(uri);
           size = status.getLength();
         }
       }
@@ -339,11 +341,12 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
       FuseFileInfo fi) {
     final AlluxioURI uri = mPathResolverCache.getUnchecked(path);
     try {
+      FileSystem fileSystem = mAuthPolicy.getFileSystemByUser(mConf);
       // standard . and .. entries
       FuseFillDir.apply(filter, buff, ".", null, 0);
       FuseFillDir.apply(filter, buff, "..", null, 0);
 
-      mFileSystem.iterateStatus(uri, file -> {
+      fileSystem.iterateStatus(uri, file -> {
         FuseFillDir.apply(filter, buff, file.getName(), null, 0);
       });
     } catch (Throwable e) {
@@ -381,7 +384,9 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
     }
 
     URIStatus status;
+    FileSystem fileSystem;
     try {
+      fileSystem = mAuthPolicy.getFileSystemByUser(mConf);
       status = getPathStatus(uri);
     } catch (Throwable t) {
       LOG.error("Failed to open {}", path, t);
@@ -391,7 +396,7 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
     if (status != null && !status.isCompleted()) {
       // Cannot open incomplete file for read or write
       // wait for file to complete in read or read_write mode
-      if (!AlluxioFuseUtils.waitForFileCompleted(mFileSystem, uri)) {
+      if (!AlluxioFuseUtils.waitForFileCompleted(fileSystem, uri)) {
         LOG.error("Failed to open {}: unable to read incomplete file", path);
         return -ErrorCodes.EIO();
       }
@@ -412,21 +417,21 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
         // Attention: according to POSIX standard
         // file cannot be removed with O_WRONLY or O_RDWR flag itself
         // O_TRUNC or fuse.truncate(size=0) is needed.
-        mFileSystem.delete(uri);
+        fileSystem.delete(uri);
         LOG.debug(String.format("Open path %s with flag 0x%x for overwriting. "
             + "Alluxio deleted the old file and created a new file for writing", path, flags));
         status = null;
       }
       if (readOnly) {
-        FileInStream is = mFileSystem.openFile(uri);
+        FileInStream is = fileSystem.openFile(uri);
         mOpenFileEntries.put(fd, is);
       } else if (status == null) {
         // If O_WRONLY without O_TRUNC
         // wait for fuse.truncate(size=0) to delete file and create new output stream
         // otherwise all future write will error out
-        FileOutStream os = mFileSystem.createFile(uri);
+        FileOutStream os = fileSystem.createFile(uri);
         mCreateFileEntries.add(new CreateFileEntry<>(fd, path, os));
-        mAuthPolicy.setUserGroupIfNeeded(uri);
+        mAuthPolicy.setUserGroupIfNeeded(fileSystem, uri);
       }
       return 0;
     } catch (Throwable t) {
@@ -547,10 +552,11 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
 
       // create file out stream
       try {
-        FileOutStream os = mFileSystem.createFile(uri);
+        FileSystem fileSystem = mAuthPolicy.getFileSystemByUser(mConf);
+        FileOutStream os = fileSystem.createFile(uri);
         ce = new CreateFileEntry<>(fd, path, os);
         mCreateFileEntries.add(ce);
-        mAuthPolicy.setUserGroupIfNeeded(uri);
+        mAuthPolicy.setUserGroupIfNeeded(fileSystem, uri);
       } catch (Throwable e) {
         LOG.error("Failed to create file output stream for {}", path, e);
         return -ErrorCodes.EIO();
@@ -661,11 +667,12 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
       return -ErrorCodes.ENAMETOOLONG();
     }
     try {
-      mFileSystem.createDirectory(uri,
+      FileSystem fileSystem = mAuthPolicy.getFileSystemByUser(mConf);
+      fileSystem.createDirectory(uri,
           CreateDirectoryPOptions.newBuilder()
               .setMode(new Mode((short) mode).toProto())
               .build());
-      mAuthPolicy.setUserGroupIfNeeded(uri);
+      mAuthPolicy.setUserGroupIfNeeded(fileSystem, uri);
     } catch (Throwable t) {
       LOG.error("Failed to mkdir {}", path, t);
       return -ErrorCodes.EIO();
@@ -693,7 +700,8 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
     final AlluxioURI uri = mPathResolverCache.getUnchecked(path);
     DeletePOptions options = DeletePOptions.newBuilder().setUnchecked(true).build();
     try {
-      mFileSystem.delete(uri, options);
+      FileSystem fileSystem = mAuthPolicy.getFileSystemByUser(mConf);
+      fileSystem.delete(uri, options);
     } catch (Throwable t) {
       LOG.error("Failed to delete {}", path, t);
       return -ErrorCodes.EIO();
@@ -751,7 +759,8 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
       }
     }
     try {
-      mFileSystem.rename(sourceUri, destUri);
+      FileSystem fileSystem = mAuthPolicy.getFileSystemByUser(mConf);
+      fileSystem.rename(sourceUri, destUri);
     } catch (Throwable e) {
       LOG.error("Failed to rename {} to {}", sourcePath, destPath, e);
       return -ErrorCodes.EIO();
@@ -771,7 +780,8 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
     SetAttributePOptions options = SetAttributePOptions.newBuilder()
         .setMode(new Mode((short) mode).toProto()).build();
     try {
-      mFileSystem.setAttribute(uri, options);
+      FileSystem fileSystem = mAuthPolicy.getFileSystemByUser(mConf);
+      fileSystem.setAttribute(uri, options);
     } catch (Throwable t) {
       LOG.error("Failed to change {} to mode {}", path, mode, t);
       return AlluxioFuseUtils.getErrorCode(t);
@@ -796,7 +806,7 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
     try {
       SetAttributePOptions.Builder optionsBuilder = SetAttributePOptions.newBuilder();
       final AlluxioURI uri = mPathResolverCache.getUnchecked(path);
-
+      FileSystem fileSystem = mAuthPolicy.getFileSystemByUser(mConf);
       String userName = "";
       if (uid != AlluxioFuseUtils.ID_NOT_SET_VALUE
           && uid != AlluxioFuseUtils.ID_NOT_SET_VALUE_UNSIGNED) {
@@ -823,7 +833,7 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
         groupName = AlluxioFuseUtils.getGroupName(userName);
         optionsBuilder.setGroup(groupName);
       }
-      mFileSystem.setAttribute(uri, optionsBuilder.build());
+      fileSystem.setAttribute(uri, optionsBuilder.build());
     } catch (Throwable t) {
       LOG.error("Failed to chown {} to uid {} and gid {}", path, uid, gid, t);
       return AlluxioFuseUtils.getErrorCode(t);
@@ -867,8 +877,10 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
     // Error out in all other cases
     final AlluxioURI uri = mPathResolverCache.getUnchecked(path);
     URIStatus status;
+    FileSystem fileSystem = null;
     try {
-      status = mFileSystem.getStatus(uri);
+      fileSystem = mAuthPolicy.getFileSystemByUser(mConf);
+      status = fileSystem.getStatus(uri);
     } catch (FileDoesNotExistException | InvalidPathException e) {
       status = null;
     } catch (Throwable t) {
@@ -888,7 +900,7 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
             return 0;
           }
           // support open(O_WRONLY or O_RDWR) -> truncate() -> write()
-          mFileSystem.delete(uri);
+          fileSystem.delete(uri);
           // TODO(lu) delete existing opened file entry if any
           // require libfuse 3 which truncate() has fd info
           // otherwise we need to change OpenFileEntries to include PATH_INDEX
@@ -904,12 +916,12 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
             return 0;
           }
           mCreateFileEntries.remove(ce);
-          mFileSystem.delete(uri);
-          os = mFileSystem.createFile(uri);
+          fileSystem.delete(uri);
+          os = fileSystem.createFile(uri);
           final long fd = ce.getId();
           ce = new CreateFileEntry(fd, path, os);
           mCreateFileEntries.add(ce);
-          mAuthPolicy.setUserGroupIfNeeded(uri);
+          mAuthPolicy.setUserGroupIfNeeded(fileSystem, uri);
           return 0;
         }
         // Case 4: Truncate size = 0, file exists and is being written by other applications
@@ -1072,7 +1084,8 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
    */
   private URIStatus getPathStatus(AlluxioURI uri) throws Exception {
     try {
-      return mFileSystem.getStatus(uri);
+      FileSystem fileSystem = mAuthPolicy.getFileSystemByUser(mConf);
+      return fileSystem.getStatus(uri);
     } catch (InvalidPathException | FileNotFoundException | FileDoesNotExistException e) {
       return null;
     }
