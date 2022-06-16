@@ -735,6 +735,22 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
       return -ErrorCodes.EIO();
     }
     try {
+      status = getPathStatus(destUri);
+    } catch (Throwable t) {
+      LOG.error("Failed to rename {} to {}: cannot get status of destination",
+          sourcePath, destPath);
+      return -ErrorCodes.EIO();
+    }
+    if (status != null) {
+      try {
+        mFileSystem.delete(destUri);
+      } catch (Throwable e) {
+        LOG.error("Failed to rename {} to {}: cannot remove existing destination file",
+            sourcePath, destPath);
+        return -ErrorCodes.EIO();
+      }
+    }
+    try {
       mFileSystem.rename(sourceUri, destUri);
     } catch (Throwable e) {
       LOG.error("Failed to rename {} to {}", sourcePath, destPath, e);
