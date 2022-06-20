@@ -13,6 +13,7 @@ package alluxio.fuse.auth;
 
 import alluxio.AlluxioURI;
 import alluxio.client.file.FileSystem;
+import alluxio.client.file.URIStatus;
 import alluxio.conf.AlluxioConfiguration;
 import alluxio.conf.PropertyKey;
 import alluxio.fuse.AlluxioFuseUtils;
@@ -113,6 +114,12 @@ public final class SystemUserGroupAuthPolicy implements AuthPolicy {
       // cannot get valid user name and group name
       return;
     }
+
+    URIStatus status = fileSystem.getStatus(uri);
+    if (userName.equals(status.getOwner()) && groupName.equals(status.getGroup())) {
+      return;
+    }
+
     SetAttributePOptions attributeOptions = SetAttributePOptions.newBuilder()
         .setGroup(groupName)
         .setOwner(userName)
