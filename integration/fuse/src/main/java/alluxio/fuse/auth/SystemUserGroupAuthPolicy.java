@@ -41,6 +41,7 @@ public final class SystemUserGroupAuthPolicy implements AuthPolicy {
   private final FileSystem mFileSystem;
   private final AbstractFuseFileSystem mFuseFileSystem;
   private final boolean mIsUserGroupTranslation;
+  private final boolean mIsImpersonation;
   private final LoadingCache<Long, String> mUsernameCache;
   private final LoadingCache<Long, String> mGroupnameCache;
 
@@ -71,11 +72,12 @@ public final class SystemUserGroupAuthPolicy implements AuthPolicy {
           }
         });
     mIsUserGroupTranslation = conf.getBoolean(PropertyKey.FUSE_USER_GROUP_TRANSLATION_ENABLED);
+    mIsImpersonation = conf.getBoolean(PropertyKey.FUSE_IMPERSONATION_ENABLED);
   }
 
   public FileSystem getFileSystemByUser(AlluxioConfiguration conf) throws Exception {
     FuseContext fc = mFuseFileSystem.getContext();
-    if (!mIsUserGroupTranslation) {
+    if (!mIsImpersonation) {
       return mFileSystem;
     }
     final Subject subject = new Subject();
@@ -88,9 +90,9 @@ public final class SystemUserGroupAuthPolicy implements AuthPolicy {
   }
 
   @Override
-  public void setUserGroupIfNeeded(FileSystem fileSystem, AlluxioURI uri) throws Exception {
+  public void setUserGroupIfNeeded(AlluxioURI uri) throws Exception {
     FuseContext fc = mFuseFileSystem.getContext();
-    if (!mIsUserGroupTranslation) {
+    if (!mIsUserGroupTranslation || mIsImpersonation) {
       return;
     }
     long uid = fc.uid.get();
@@ -115,7 +117,7 @@ public final class SystemUserGroupAuthPolicy implements AuthPolicy {
       return;
     }
 
-    URIStatus status = fileSystem.getStatus(uri);
+    URIStatus status = mFileSystem.getStatus(uri);
     if (userName.equals(status.getOwner()) && groupName.equals(status.getGroup())) {
       return;
     }
@@ -125,6 +127,6 @@ public final class SystemUserGroupAuthPolicy implements AuthPolicy {
         .setOwner(userName)
         .build();
     LOG.debug("Set attributes of path {} to {}", uri, attributeOptions);
-    fileSystem.setAttribute(uri, attributeOptions);
+    mFileSystem.setAttribute(uri, attributeOptions);
   }
 }

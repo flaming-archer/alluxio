@@ -22,10 +22,9 @@ public interface AuthPolicy {
   /**
    * Sets user and group if needed.
    *
-   * @param fileSystem the file system
    * @param uri the path uri
    */
-  void setUserGroupIfNeeded(FileSystem fileSystem, AlluxioURI uri) throws Exception;
+  void setUserGroupIfNeeded(AlluxioURI uri) throws Exception;
 
   /**
    *

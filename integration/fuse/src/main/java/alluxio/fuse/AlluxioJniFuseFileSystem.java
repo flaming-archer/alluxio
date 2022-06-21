@@ -228,7 +228,7 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
       long fid = mNextOpenFileId.getAndIncrement();
       mCreateFileEntries.add(new CreateFileEntry<>(fid, path, os));
       fi.fh.set(fid);
-      mAuthPolicy.setUserGroupIfNeeded(fileSystem, uri);
+      mAuthPolicy.setUserGroupIfNeeded(uri);
     } catch (Throwable t) {
       LOG.error("Failed to create {}", path, t);
       return -ErrorCodes.EIO();
@@ -431,7 +431,7 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
         // otherwise all future write will error out
         FileOutStream os = fileSystem.createFile(uri);
         mCreateFileEntries.add(new CreateFileEntry<>(fd, path, os));
-        mAuthPolicy.setUserGroupIfNeeded(fileSystem, uri);
+        mAuthPolicy.setUserGroupIfNeeded(uri);
       }
       return 0;
     } catch (Throwable t) {
@@ -556,7 +556,7 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
         FileOutStream os = fileSystem.createFile(uri);
         ce = new CreateFileEntry<>(fd, path, os);
         mCreateFileEntries.add(ce);
-        mAuthPolicy.setUserGroupIfNeeded(fileSystem, uri);
+        mAuthPolicy.setUserGroupIfNeeded(uri);
       } catch (Throwable e) {
         LOG.error("Failed to create file output stream for {}", path, e);
         return -ErrorCodes.EIO();
@@ -672,7 +672,7 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
           CreateDirectoryPOptions.newBuilder()
               .setMode(new Mode((short) mode).toProto())
               .build());
-      mAuthPolicy.setUserGroupIfNeeded(fileSystem, uri);
+      mAuthPolicy.setUserGroupIfNeeded(uri);
     } catch (Throwable t) {
       LOG.error("Failed to mkdir {}", path, t);
       return -ErrorCodes.EIO();
@@ -921,7 +921,7 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
           final long fd = ce.getId();
           ce = new CreateFileEntry(fd, path, os);
           mCreateFileEntries.add(ce);
-          mAuthPolicy.setUserGroupIfNeeded(fileSystem, uri);
+          mAuthPolicy.setUserGroupIfNeeded(uri);
           return 0;
         }
         // Case 4: Truncate size = 0, file exists and is being written by other applications

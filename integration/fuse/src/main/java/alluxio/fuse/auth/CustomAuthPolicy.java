@@ -48,7 +48,7 @@ public class CustomAuthPolicy implements AuthPolicy {
   }
 
   @Override
-  public void setUserGroupIfNeeded(FileSystem fileSystem, AlluxioURI uri) throws Exception {
+  public void setUserGroupIfNeeded(AlluxioURI uri) throws Exception {
     if (StringUtils.isEmpty(mUname) || StringUtils.isEmpty(mGname)) {
       return;
     }
@@ -56,7 +56,7 @@ public class CustomAuthPolicy implements AuthPolicy {
         .setGroup(mGname)
         .setOwner(mUname)
         .build();
-    fileSystem.setAttribute(uri, attributeOptions);
+    mFileSystem.setAttribute(uri, attributeOptions);
     LOG.debug("Set attributes of path {} to {}", uri, attributeOptions);
   }
 

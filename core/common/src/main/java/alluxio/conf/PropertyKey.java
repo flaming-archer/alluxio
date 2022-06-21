@@ -5466,6 +5466,12 @@ public final class PropertyKey implements Comparable<PropertyKey> {
               + "will drop the metadata cache of path '/mnt/alluxio-fuse/path/to/be/cleaned/'")
           .setScope(Scope.CLIENT)
           .build();
+  public static final PropertyKey FUSE_IMPERSONATION_ENABLED =
+      new Builder(Name.FUSE_IMPERSONATION_ENABLED)
+          .setDefaultValue(false)
+          .setDescription("Whether to enable use impersonate for fuse service.")
+          .setScope(Scope.CLIENT)
+          .build();
   //
   // Standalone FUSE process related properties
   //
@@ -7297,6 +7303,8 @@ public final class PropertyKey implements Comparable<PropertyKey> {
         "alluxio.fuse.user.group.translation.enabled";
     public static final String FUSE_SPECIAL_COMMAND_ENABLED =
         "alluxio.fuse.special.command.enabled";
+    public static final String FUSE_IMPERSONATION_ENABLED =
+        "alluxio.fuse.impersonation.enabled";
     //
     // Standalone FUSE process related properties
     //
