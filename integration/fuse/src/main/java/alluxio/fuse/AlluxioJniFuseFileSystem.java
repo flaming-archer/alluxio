@@ -54,12 +54,17 @@ import com.google.common.base.Suppliers;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
+import org.apache.logging.log4j.util.ProcessIdUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -127,6 +132,8 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
       = new IndexedSet<>(ID_INDEX, PATH_INDEX);
   private final boolean mIsUserGroupTranslation;
   private final AuthPolicy mAuthPolicy;
+  private final String mStageDir;
+  private final String mProcessId;
 
   /** df command will treat -1 as an unknown value. */
   @VisibleForTesting
@@ -146,6 +153,21 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
   public AlluxioJniFuseFileSystem(
       FileSystemContext fsContext, FileSystem fs, FuseMountConfig opts, AlluxioConfiguration conf) {
     super(Paths.get(opts.getMountPoint()));
+    mStageDir = conf.get(PropertyKey.FUSE_STAGE_DIR);
+    Path stagePath = Paths.get(mStageDir);
+    if (Files.isRegularFile(stagePath)) {
+      LOG.error("Mount point {} is not a directory but a file", mStageDir);
+      throw new IllegalArgumentException(PropertyKey.FUSE_STAGE_DIR + " should be a directory");
+    }
+    if (!Files.exists(stagePath)) {
+      LOG.warn("Stage dir on local filesystem does not exist, creating {}", mStageDir);
+      try {
+        Files.createDirectories(stagePath);
+      } catch (IOException e) {
+        LOG.error("Creating {} failed: {}", mStageDir, e);
+        throw new IllegalArgumentException("Creating " + mStageDir + " failed", e);
+      }
+    }
     mFsName = conf.get(PropertyKey.FUSE_FS_NAME);
     mFileSystemContext = fsContext;
     mFileSystem = fs;
@@ -204,6 +226,7 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
     MetricsSystem.registerGaugeIfAbsent(
         MetricsSystem.getMetricName(MetricKey.FUSE_CACHED_PATH_COUNT.getName()),
         mPathResolverCache::size);
+    mProcessId = ProcessIdUtil.getProcessId();
   }
 
   @Override
@@ -432,6 +455,36 @@ public final class AlluxioJniFuseFileSystem extends AbstractFuseFileSystem
         FileOutStream os = fileSystem.createFile(uri);
         mCreateFileEntries.add(new CreateFileEntry<>(fd, path, os));
         mAuthPolicy.setUserGroupIfNeeded(uri);
+      } else {
+        // It's an "append" case
+        //
+        // Create a temp file in the local filesystem to stage the content
+        // of the original alluxio file
+        File stageFile = File.createTempFile(
+            String.format("%s.%s.", mProcessId, Thread.currentThread().getId()),
+            null, new File(mStageDir));
+        LOG.debug("Created a stage file {} for {}", stageFile.getAbsolutePath(), uri);
+        try (FileOutputStream os = new FileOutputStream(stageFile);
+             FileInStream is = fileSystem.openFile(uri)) {
+          int i;
+          while ((i = is.read()) != -1) {
+            os.write(i);
+          }
+        }
+
+        // Delete the original alluxio file and create a new one
+        fileSystem.delete(uri);
+        FileOutStream os = fileSystem.createFile(uri);
+        mCreateFileEntries.add(new CreateFileEntry<>(fd, path, os));
+        mAuthPolicy.setUserGroupIfNeeded(uri);
+        try (FileInputStream is = new FileInputStream(stageFile)) {
+          int i;
+          while ((i = is.read()) != -1) {
+            os.write(i);
+          }
+        }
+
+        stageFile.delete();
       }
       return 0;
     } catch (Throwable t) {

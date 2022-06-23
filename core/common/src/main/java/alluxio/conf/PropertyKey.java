@@ -5472,6 +5472,14 @@ public final class PropertyKey implements Comparable<PropertyKey> {
           .setDescription("Whether to enable use impersonate for fuse service.")
           .setScope(Scope.CLIENT)
           .build();
+  public static final PropertyKey FUSE_STAGE_DIR =
+      new Builder(Name.FUSE_STAGE_DIR)
+          .setDefaultValue("/tmp/alluxio-fuse")
+          .setDescription("A local filesystem directory used to stage files "
+              + "while doing append/modify under an alluxio-fuse path.")
+          .setConsistencyCheckLevel(ConsistencyCheckLevel.IGNORE)
+          .setScope(Scope.CLIENT)
+          .build();
   //
   // Standalone FUSE process related properties
   //
@@ -7305,6 +7313,8 @@ public final class PropertyKey implements Comparable<PropertyKey> {
         "alluxio.fuse.special.command.enabled";
     public static final String FUSE_IMPERSONATION_ENABLED =
         "alluxio.fuse.impersonation.enabled";
+    public static final String FUSE_STAGE_DIR =
+        "alluxio.fuse.stage.dir";
     //
     // Standalone FUSE process related properties
     //
