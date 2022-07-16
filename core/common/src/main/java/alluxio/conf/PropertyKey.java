@@ -5681,6 +5681,32 @@ public final class PropertyKey implements Comparable<PropertyKey> {
           .setDescription("the max number of rpcPassword could be cached")
           .setScope(Scope.MASTER)
           .build();
+  public static final PropertyKey SECURITY_USER_MOUNT_CHECK_ENABLED =
+      new Builder(Name.SECURITY_USER_MOUNT_CHECK_ENABLED)
+          .setDefaultValue(false)
+          .setDescription("Whether to enable check user mount point.")
+          .setScope(Scope.MASTER)
+          .build();
+  public static final PropertyKey SECURITY_USER_MOUNT_MAPPING_FILE =
+      new Builder(Name.SECURITY_USER_MOUNT_MAPPING_FILE)
+          .setDefaultValue("/etc/alluxio/mounts")
+          .setDescription("The file is located on the server and contains the username and "
+                          + "its Alluxio path prefix allowed to mount.")
+          .setScope(Scope.MASTER)
+          .build();
+  public static final PropertyKey SECURITY_USER_MOUNT_MAPPING_FILE_CACHE_SEC =
+      new Builder(Name.SECURITY_USER_MOUNT_MAPPING_FILE_CACHE_SEC)
+          .setDefaultValue(300)
+          .setDescription("Time for cached mapping file to expire")
+          .setScope(Scope.MASTER)
+          .build();
+  public static final PropertyKey SECURITY_USER_MOUNT_MAPPING_CLASSNAME =
+      new Builder(Name.SECURITY_USER_MOUNT_MAPPING_CLASSNAME)
+          .setDescription("The class's name is instantiated as user's mount rule provider.")
+          .setDefaultValue("alluxio.master.mount.rule.ConfigurationUserMountRuleProvider")
+          .setConsistencyCheckLevel(ConsistencyCheckLevel.ENFORCE)
+          .setScope(Scope.ALL)
+          .build();
   public static final PropertyKey S3_REST_AUTHENTICATION_ENABLED =
       new Builder(Name.S3_REST_AUTHENTICATION_ENABLED)
           .setDefaultValue(false)
@@ -7370,6 +7396,14 @@ public final class PropertyKey implements Comparable<PropertyKey> {
          "alluxio.security.rpc-password.match.cache.expire.minute";
     public static final String SECURITY_RPC_PASSWORD_MATCH_CACHE_SIZE =
          "hadoop.security.rpc-password.match.cache.size";
+    public static final String SECURITY_USER_MOUNT_CHECK_ENABLED =
+         "alluxio.security.user.mount.check.enabled";
+    public static final String SECURITY_USER_MOUNT_MAPPING_FILE =
+         "alluxio.security.user.mount.mapping.file";
+    public static final String SECURITY_USER_MOUNT_MAPPING_FILE_CACHE_SEC =
+         "alluxio.security.user.mount.mapping.file.cache.sec";
+    public static final String SECURITY_USER_MOUNT_MAPPING_CLASSNAME =
+          "alluxio.security.user.mount.mapping.classname";
     public static final String S3_REST_AUTHENTICATION_ENABLED =
          "alluxio.s3.rest.authentication.enabled";
     public static final String S3_REST_AUTHENTICATOR_CLASSNAME =
@@ -7568,6 +7602,8 @@ public final class PropertyKey implements Comparable<PropertyKey> {
     MASTER_MOUNT_TABLE_ROOT_OPTION_PROPERTY("alluxio.master.mount.table.root.option.%s",
         "alluxio\\.master\\.mount\\.table\\.root\\.option\\.(?<nested>(\\w+\\.)*+\\w+)",
         PropertyCreators.NESTED_UFS_PROPERTY_CREATOR),
+    MASTER_MOUNT_PREFIX_PATH("alluxio.master.mount.table.%s.parent.path",
+        "alluxio\\.master\\.mount\\.table\\.(\\w+)\\.prefix\\.path"),
     MASTER_TIERED_STORE_GLOBAL_LEVEL_ALIAS("alluxio.master.tieredstore.global.level%d.alias",
         "alluxio\\.master\\.tieredstore\\.global\\.level(\\d+)\\.alias"),
     UNDERFS_ABFS_ACCOUNT_KEY(

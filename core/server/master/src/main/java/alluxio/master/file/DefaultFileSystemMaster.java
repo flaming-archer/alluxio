@@ -120,6 +120,7 @@ import alluxio.master.metastore.DelegatingReadOnlyInodeStore;
 import alluxio.master.metastore.InodeStore;
 import alluxio.master.metastore.ReadOnlyInodeStore;
 import alluxio.master.metrics.TimeSeriesStore;
+import alluxio.master.mount.rule.UserMountPointChecker;
 import alluxio.metrics.Metric;
 import alluxio.metrics.MetricInfo;
 import alluxio.metrics.MetricKey;
@@ -398,6 +399,8 @@ public final class DefaultFileSystemMaster extends CoreMaster
   /** Used to check pending/running backup from RPCs. */
   private CallTracker mStateLockCallTracker;
 
+  private UserMountPointChecker mUserMountPointChecker;
+
   final ThreadPoolExecutor mSyncPrefetchExecutor = new ThreadPoolExecutor(
       ServerConfiguration.getInt(PropertyKey.MASTER_METADATA_SYNC_UFS_PREFETCH_POOL_SIZE),
       ServerConfiguration.getInt(PropertyKey.MASTER_METADATA_SYNC_UFS_PREFETCH_POOL_SIZE),
@@ -478,6 +481,7 @@ public final class DefaultFileSystemMaster extends CoreMaster
     mSyncManager = new ActiveSyncManager(mMountTable, this);
     mTimeSeriesStore = new TimeSeriesStore();
     mAccessTimeUpdater = new AccessTimeUpdater(this, mInodeTree, masterContext.getJournalSystem());
+    mUserMountPointChecker = new UserMountPointChecker(ServerConfiguration.global());
     // Sync executors should allow core threads to time out
     mSyncPrefetchExecutor.allowCoreThreadTimeOut(true);
     mSyncMetadataExecutor.allowCoreThreadTimeOut(true);
@@ -2922,6 +2926,10 @@ public final class DefaultFileSystemMaster extends CoreMaster
           false
       );
 
+      if (ServerConfiguration.getBoolean(PropertyKey.SECURITY_USER_MOUNT_CHECK_ENABLED)) {
+        checkMountParent(alluxioPath);
+      }
+
       LockingScheme lockingScheme =
           createLockingScheme(alluxioPath, context.getOptions().getCommonOptions(),
               LockPattern.WRITE_EDGE);
@@ -2940,6 +2948,13 @@ public final class DefaultFileSystemMaster extends CoreMaster
         Metrics.PATHS_MOUNTED.inc();
       }
     }
+  }
+
+  private void checkMountParent(AlluxioURI alluxioPath)
+      throws AccessControlException, InvalidPathException {
+    String owner = AuthenticatedClientUser.getClientUser(ServerConfiguration.global());
+    String path = alluxioPath.getPath();
+    mUserMountPointChecker.checkMountPoint(owner, path);
   }
 
   /**
