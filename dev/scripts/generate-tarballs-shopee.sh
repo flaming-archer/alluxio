@@ -12,4 +12,4 @@
 
 readonly SCRIPT_DIR=$(cd "$( dirname "$0" )"; pwd)
 cd "$SCRIPT_DIR"
-./generate-tarballs single -ufs-modules ufs-hadoop-2.10,ufs-hadoop-ozone-1.2.1 -mvn-args "-DskipTests,-Dmaven.javadoc.skip" -target alluxio-2.7.1-sdi-014-bin.tar.gz
+./generate-tarballs single -ufs-modules ufs-hadoop-2.10,ufs-hadoop-ozone-1.2.1 -mvn-args "-DskipTests,-Dmaven.javadoc.skip" -target alluxio-2.7.1-sdi-015-bin.tar.gz
