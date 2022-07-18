@@ -4101,6 +4101,13 @@ public final class PropertyKey implements Comparable<PropertyKey> {
           .setDefaultValue(10000)
           .setScope(Scope.SERVER)
           .build();
+  public static final PropertyKey PROXY_AUDIT_LOGGING_ENABLED =
+      new Builder(Name.PROXY_AUDIT_LOGGING_ENABLED)
+          .setDefaultValue(false)
+          .setDescription("Set to true to enable proxy audit.")
+          .setConsistencyCheckLevel(ConsistencyCheckLevel.WARN)
+          .setScope(Scope.SERVER)
+          .build();
 
   //
   // Locality related properties
@@ -7039,6 +7046,8 @@ public final class PropertyKey implements Comparable<PropertyKey> {
         "alluxio.s3.rest.authenticator.ram.cache.expire.timeout";
     public static final String S3_REST_AUTHENTICATOR_RAM_CACHE_SIZE =
         "alluxio.s3.rest.authenticator.ram.cache.size";
+    public static final String PROXY_AUDIT_LOGGING_ENABLED =
+        "alluxio.proxy.audit.logging.enabled";
 
     //
     // Locality related properties

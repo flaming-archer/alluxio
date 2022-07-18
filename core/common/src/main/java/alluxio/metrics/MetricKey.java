@@ -600,6 +600,12 @@ public final class MetricKey implements Comparable<MetricKey> {
           .setMetricType(MetricType.GAUGE)
           .setIsClusterAggregated(false)
           .build();
+  public static final MetricKey PROXY_AUDIT_LOG_ENTRIES_SIZE =
+      new Builder("Proxy.AuditLogEntriesSize")
+          .setDescription("The size of the audit log entries blocking queue")
+          .setMetricType(MetricType.GAUGE)
+          .setIsClusterAggregated(false)
+          .build();
   // Journal metrics
   public static final MetricKey MASTER_EMBEDDED_JOURNAL_SNAPSHOT_GENERATE_TIMER =
       new Builder("Master.EmbeddedJournalSnapshotGenerateTimer")
