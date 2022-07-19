@@ -1267,6 +1267,7 @@
             <exclude>**/src/test/resources/**</exclude>
             <exclude>**/vagrant/**/*</exclude>
             <exclude>**/\?/.java/**/*</exclude>
+            <exclude>.ci/*</exclude>
 
             <!-- Build and Packaging Exclusions -->
             <exclude>webui/node_modules/*</exclude>
