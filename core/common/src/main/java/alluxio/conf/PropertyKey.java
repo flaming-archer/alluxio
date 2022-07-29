@@ -5806,7 +5806,7 @@ public final class PropertyKey implements Comparable<PropertyKey> {
   // TODO(ns) Fix default value to handle other UFS types
   public static final PropertyKey UNDERFS_VERSION =
       new Builder(Name.UNDERFS_VERSION)
-          .setDefaultValue("3.3.0")
+          .setDefaultValue("2.10.sdi-059")
           .setIsHidden(true)
           .build();
 
