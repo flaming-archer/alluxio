@@ -68,7 +68,7 @@ public class SimpleUserState extends BaseUserState {
       try {
         ugi = UserGroupInformation.getCurrentUser();
       } catch (IOException e) {
-        throw new UnauthenticatedException("Failed to login: " + e.getMessage(), e);
+        LOG.warn("Failed to login: " + e.getMessage());
       }
       if (ugi != null && StringUtils.isNotEmpty(ugi.getUserName())) {
         username = ugi.getUserName();

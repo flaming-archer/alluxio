@@ -177,7 +177,7 @@ public final class AppLoginModule implements LoginModule {
           nameCallback.setName(mUserName);
         } else if (callback instanceof PasswordCallback) {
           PasswordCallback passwordCallback = (PasswordCallback) callback;
-          passwordCallback.setPassword(mRpcPassword.toCharArray());
+          passwordCallback.setPassword(mRpcPassword != null ? mRpcPassword.toCharArray() : null);
         } else {
           Class<?> callbackClass = (callback == null) ? null : callback.getClass();
           throw new UnsupportedCallbackException(callback, callbackClass + " is unsupported.");

@@ -51,23 +51,27 @@ public final class LoginModuleTest {
     Subject subject = new Subject();
 
     // login, add OS user into subject, and add corresponding Alluxio user into subject
-    LoginContext loginContext = new LoginContext("simple", subject, null,
+    LoginContext loginContext = new LoginContext("simple", subject,
+        new AppLoginModule.AppCallbackHandler(null, "noPassword"),
         new LoginModuleConfiguration());
     loginContext.login();
 
     // verify whether OS user and Alluxio user is added.
     assertFalse(subject.getPrincipals(clazz).isEmpty());
     assertFalse(subject.getPrincipals(User.class).isEmpty());
+    assertFalse(subject.getPrivateCredentials(String.class).isEmpty());
 
     // logout and verify the user is removed
     loginContext.logout();
     assertTrue(subject.getPrincipals(User.class).isEmpty());
+    assertTrue(subject.getPrivateCredentials(String.class).isEmpty());
 
     if (CommonUtils.getJavaVersion() == 8) {
       // logout twice should be no-op in java 8
       // logout more than once is not allowed in java 11
       loginContext.logout();
       assertTrue(subject.getPrincipals(User.class).isEmpty());
+      assertTrue(subject.getPrivateCredentials(String.class).isEmpty());
     }
   }
 
@@ -82,13 +86,16 @@ public final class LoginModuleTest {
         .getSystemClassLoader().loadClass(clazzName);
     Subject subject = new Subject();
     // login, add OS user into subject, and add corresponding Alluxio user into subject
-    LoginContext loginContext = new LoginContext("simple", subject, null,
+    LoginContext loginContext = new LoginContext("simple", subject,
+        new AppLoginModule.AppCallbackHandler(null, null),
         new LoginModuleConfiguration());
     loginContext.login();
 
     // verify whether OS user and Alluxio user is added.
     assertFalse(subject.getPrincipals(clazz).isEmpty());
     assertFalse(subject.getPrincipals(User.class).isEmpty());
+    // If the password is null, the credential will not be added
+    assertTrue(subject.getPrivateCredentials(String.class).isEmpty());
 
     // logout read only subject should fail.
     subject.setReadOnly();

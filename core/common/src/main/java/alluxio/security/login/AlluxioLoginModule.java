@@ -107,7 +107,8 @@ public final class AlluxioLoginModule implements LoginModule {
         throw new LoginException(e.getMessage());
       }
       mUser = new User(user.getName());
-      mRpcPassword = new String(passwordCallback.getPassword());
+      mRpcPassword = passwordCallback.getPassword() != null
+          ? new String(passwordCallback.getPassword()) : null;
       mSubject.getPrincipals().add(mUser);
       if (mRpcPassword != null && !mRpcPassword.isEmpty()) {
         mSubject.getPrivateCredentials().add(mRpcPassword);
