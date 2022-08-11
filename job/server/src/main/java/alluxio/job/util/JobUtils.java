@@ -143,7 +143,7 @@ public final class JobUtils {
     // from ufs (e.g. distributed load) or from a remote worker (e.g. setReplication)
     // This does not work for remote worker unless we have passive cache on.
     // Only use this read local first method to load if nearest worker is clear
-    if (netAddress.size() <= 1 && pinnedLocation.isEmpty() && status.isPersisted()) {
+    if (netAddress.size() <= 1 && !status.getFileInfo().isPinned() && status.isPersisted()) {
       AlluxioProperties prop = context.getClusterConf().copyProperties();
       prop.set(PropertyKey.USER_FILE_PASSIVE_CACHE_ENABLED, "true");
       AlluxioConfiguration config = new InstancedConfiguration(prop);
