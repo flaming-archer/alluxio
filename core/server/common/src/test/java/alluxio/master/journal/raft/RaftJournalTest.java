@@ -28,6 +28,7 @@ import org.apache.ratis.server.RaftServer;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
@@ -109,6 +110,7 @@ public class RaftJournalTest {
   }
 
   @Test
+  @Ignore
   public void joinCluster() throws Exception {
     // Create entries on the leader journal context.
     // These will be replicated to follower journal context.
