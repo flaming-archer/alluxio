@@ -168,10 +168,10 @@
     <jackson.version>2.11.1</jackson.version>
     <hadoop-cos.version>3.1.0-5.8.5</hadoop-cos.version>
     <cos_api.version>5.6.19</cos_api.version>
-    <surefire.forkCount>2</surefire.forkCount>
+    <surefire.forkCount>4</surefire.forkCount>
     <surefire.useSystemClassLoader>true</surefire.useSystemClassLoader>
     <surefire.excludesFile>slow-tests</surefire.excludesFile>
-    <surefire.rerunFailingTestsCount>1</surefire.rerunFailingTestsCount>
+    <surefire.rerunFailingTestsCount>2</surefire.rerunFailingTestsCount>
     <test.output.redirect>true</test.output.redirect>
     <update.check.auth.string>YWxsdXhpbzp0YWNoeW9u</update.check.auth.string>
     <update.check.enabled>true</update.check.enabled>
@@ -1029,7 +1029,7 @@
           <artifactId>maven-surefire-plugin</artifactId>
           <version>3.0.0-M5</version>
           <configuration>
-            <argLine>@{argLine} -Djava.net.preferIPv4Stack=true</argLine>
+            <argLine>@{argLine} -Xmx2048m -Djava.net.preferIPv4Stack=true</argLine>
             <excludesFile>${build.path}/surefire/${surefire.excludesFile}</excludesFile>
             <forkCount>${surefire.forkCount}</forkCount>
             <rerunFailingTestsCount>${surefire.rerunFailingTestsCount}</rerunFailingTestsCount>

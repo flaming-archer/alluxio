@@ -2,6 +2,7 @@ FROM gitlab/gitlab-runner:latest
 
 RUN apt-get -q update \
     && apt-get -q install -y --no-install-recommends \
+        libfuse2 libfuse-dev \
         apt-utils \
         curl \
         vim \

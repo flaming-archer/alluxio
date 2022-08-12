@@ -24,6 +24,10 @@ compile-job:
     - alluxio
   script:
     - mvn clean package -DskipTests
+  cache:
+    paths:
+      - webui/master/build/index.html
+      - webui/worker/build/index.html
 
 test-job:
   stage: test
@@ -31,6 +35,11 @@ test-job:
     - alluxio
   script:
     - mvn test
+  cache:
+    paths:
+      - webui/master/build/index.html
+      - webui/worker/build/index.html
+    policy: pull
 
 build-tarball-job:
   stage: build-tarball
