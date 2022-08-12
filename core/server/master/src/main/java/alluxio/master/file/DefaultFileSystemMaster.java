@@ -401,6 +401,9 @@ public final class DefaultFileSystemMaster extends CoreMaster
 
   private UserMountPointChecker mUserMountPointChecker;
 
+  /** Store the path being mounted. **/
+  private final ConcurrentHashMap<String, String> mMountingMap;
+
   final ThreadPoolExecutor mSyncPrefetchExecutor = new ThreadPoolExecutor(
       ServerConfiguration.getInt(PropertyKey.MASTER_METADATA_SYNC_UFS_PREFETCH_POOL_SIZE),
       ServerConfiguration.getInt(PropertyKey.MASTER_METADATA_SYNC_UFS_PREFETCH_POOL_SIZE),
@@ -499,7 +502,7 @@ public final class DefaultFileSystemMaster extends CoreMaster
       }
     };
     mJournaledGroup = new JournaledGroup(journaledComponents, CheckpointName.FILE_SYSTEM_MASTER);
-
+    mMountingMap = new ConcurrentHashMap<>();
     resetState();
     Metrics.registerGauges(mUfsManager, mInodeTree);
   }
@@ -2834,19 +2837,16 @@ public final class DefaultFileSystemMaster extends CoreMaster
     return !inodeExists || loadDirectChildren;
   }
 
-  private void prepareForMount(AlluxioURI ufsPath, long mountId, MountContext context)
-      throws IOException {
-    MountPOptions.Builder mountOption = context.getOptions();
-    try (CloseableResource<UnderFileSystem> ufsResource =
-        mUfsManager.get(mountId).acquireUfsResource()) {
-      UnderFileSystem ufs = ufsResource.get();
-      // Check that the ufsPath exists and is a directory
+  private void prepareForMount(AlluxioURI ufsPath, MountContext context) throws IOException {
+    try (UnderFileSystem ufs = UnderFileSystem.Factory.create(ufsPath.toString(),
+        UnderFileSystemConfiguration.defaults(ServerConfiguration.global())
+            .createMountSpecificConf(context.getOptions().getPropertiesMap()))) {
       if (!ufs.isDirectory(ufsPath.toString())) {
         throw new IOException(
             ExceptionMessage.UFS_PATH_DOES_NOT_EXIST.getMessage(ufsPath.toString()));
       }
       if (UnderFileSystemUtils.isWeb(ufs)) {
-        mountOption.setReadOnly(true);
+        context.getOptions().setReadOnly(true);
       }
     }
   }
@@ -2869,7 +2869,6 @@ public final class DefaultFileSystemMaster extends CoreMaster
               .setReadOnly(context.getOptions().getReadOnly())
               .setShared(context.getOptions().getShared())
               .createMountSpecificConf(context.getOptions().getPropertiesMap()));
-      prepareForMount(ufsPath, newMountId, context);
       // old ufsClient is removed as part of the mount table update process
       mMountTable.update(journalContext, alluxioPath, newMountId, context.getOptions().build());
     } catch (FileAlreadyExistsException | InvalidPathException | IOException e) {
@@ -2901,6 +2900,7 @@ public final class DefaultFileSystemMaster extends CoreMaster
         throw new InvalidPathException("Failed to update mount properties for "
             + inodePath.getUri() + ". Please ensure the path is an existing mount point.");
       }
+      prepareForMount(mountInfo.getUfsUri(), context);
       updateMountInternal(rpcContext, inodePath, mountInfo.getUfsUri(), mountInfo, context);
       auditContext.setSucceeded(true);
     }
@@ -2930,6 +2930,17 @@ public final class DefaultFileSystemMaster extends CoreMaster
         checkMountParent(alluxioPath);
       }
 
+      if (mMountingMap.containsKey(alluxioPath.toString())
+          || mMountingMap.containsValue(ufsPath.toString())) {
+        throw new InvalidPathException(
+            String.format("Alluxio path %s or ufs path %s is being mounted.",
+                alluxioPath, ufsPath));
+      } else {
+        mMountingMap.put(alluxioPath.toString(), ufsPath.toString());
+      }
+
+      prepareForMount(ufsPath, context);
+
       LockingScheme lockingScheme =
           createLockingScheme(alluxioPath, context.getOptions().getCommonOptions(),
               LockPattern.WRITE_EDGE);
@@ -2946,6 +2957,8 @@ public final class DefaultFileSystemMaster extends CoreMaster
         mountInternal(rpcContext, inodePath, ufsPath, context);
         auditContext.setSucceeded(true);
         Metrics.PATHS_MOUNTED.inc();
+      } finally {
+        mMountingMap.remove(alluxioPath.toString());
       }
     }
   }
@@ -3014,7 +3027,6 @@ public final class DefaultFileSystemMaster extends CoreMaster
             .setShared(context.getOptions().getShared())
             .createMountSpecificConf(context.getOptions().getPropertiesMap()));
     try {
-      prepareForMount(ufsPath, mountId, context);
       // Check that the alluxioPath we're creating doesn't shadow a path in the parent UFS
       MountTable.Resolution resolution = mMountTable.resolve(alluxioPath);
       try (CloseableResource<UnderFileSystem> ufsResource =
