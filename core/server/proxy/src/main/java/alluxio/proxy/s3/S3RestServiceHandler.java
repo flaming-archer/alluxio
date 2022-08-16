@@ -28,6 +28,7 @@ import alluxio.exception.FileDoesNotExistException;
 import alluxio.grpc.CreateDirectoryPOptions;
 import alluxio.grpc.CreateFilePOptions;
 import alluxio.grpc.DeletePOptions;
+import alluxio.grpc.FileSystemMasterCommonPOptions;
 import alluxio.grpc.ListStatusPOptions;
 import alluxio.master.audit.AsyncUserAccessAuditLogWriter;
 import alluxio.metrics.MetricKey;
@@ -316,13 +317,17 @@ public final class S3RestServiceHandler {
 
       try (S3AuditContext auditContext = createAuditContext("listObjects", user, bucket, null)) {
         try {
+          // Force metadata to be refreshed by setting syncIntervalMs to 0
+          // to ensure data consistency.
+          ListStatusPOptions.Builder optionsBuilder = ListStatusPOptions.newBuilder()
+              .setCommonOptions(FileSystemMasterCommonPOptions.newBuilder().setSyncIntervalMs(0));
           // only list the direct children if delimiter is not null
           if (delimiterParam != null) {
             path = parsePath(path, prefix, delimiterParam);
-            children = fs.listStatus(new AlluxioURI(path));
+            children = fs.listStatus(new AlluxioURI(path), optionsBuilder.build());
           } else {
-            ListStatusPOptions options = ListStatusPOptions.newBuilder().setRecursive(true).build();
-            children = fs.listStatus(new AlluxioURI(path), options);
+            optionsBuilder.setRecursive(true);
+            children = fs.listStatus(new AlluxioURI(path), optionsBuilder.build());
           }
         } catch (FileDoesNotExistException e) {
           // return the proper error code if the bucket doesn't exist. Previously a 500 error was
