@@ -122,8 +122,8 @@ public class JNIFuseIntegrationTest extends AbstractFuseIntegrationTest {
       try {
         Assert.assertEquals(0, mFuseFileSystem.open(testFile, info));
         ByteBuffer buffer = BufferUtils.getIncreasingByteBuffer(FILE_LEN);
-        // O_WRONLY without O_TRUNC cannot overwrite
-        Assert.assertTrue(mFuseFileSystem.write(testFile, buffer, FILE_LEN, 0, info) < 0);
+        // O_WRONLY without O_TRUNC can overwrite
+        Assert.assertTrue(mFuseFileSystem.write(testFile, buffer, FILE_LEN, 0, info) > 0);
       } finally {
         mFuseFileSystem.release(testFile, info);
       }
