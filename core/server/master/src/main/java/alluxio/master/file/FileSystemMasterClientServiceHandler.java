@@ -216,7 +216,6 @@ public final class FileSystemMasterClientServiceHandler
   @Override
   public void getStatus(GetStatusPRequest request,
       StreamObserver<GetStatusPResponse> responseObserver) {
-    String path = request.getPath();
     GetStatusPOptions options = request.getOptions();
     RpcUtils.call(LOG, () -> {
       AlluxioURI pathUri = getAlluxioURI(request.getPath());
