@@ -7262,23 +7262,25 @@ public final class PropertyKey implements Comparable<PropertyKey> {
       booleanBuilder(Name.SECURITY_AUTHORIZATION_PERMISSION_RANGER_ENABLED)
           .setDefaultValue(false)
           .setDescription("Whether to enable Ranger authorization checks inside the permission "
-              + "checker. When enabled, Ranger decisions are applied in addition to native ACL "
-              + "checks.")
+              + "checker. Ranger plugins fetch policies from Ranger Admin and evaluate access "
+              + "locally, so Ranger decisions are applied in addition to native ACL checks.")
           .setConsistencyCheckLevel(ConsistencyCheckLevel.ENFORCE)
           .setScope(Scope.MASTER)
           .setIsDynamic(false)
           .build();
   public static final PropertyKey SECURITY_AUTHORIZATION_PERMISSION_RANGER_SERVICE_TYPE =
       stringBuilder(Name.SECURITY_AUTHORIZATION_PERMISSION_RANGER_SERVICE_TYPE)
-          .setDefaultValue("alluxio")
-          .setDescription("Ranger service type passed to RangerBasePlugin.")
+          .setDefaultValue("hdfs")
+          .setDescription("Ranger service type passed to RangerBasePlugin. "
+              + "Defaults to hdfs so Alluxio can reuse existing Ranger HDFS service "
+              + "definitions and policies.")
           .setConsistencyCheckLevel(ConsistencyCheckLevel.ENFORCE)
           .setScope(Scope.MASTER)
           .setIsDynamic(false)
           .build();
   public static final PropertyKey SECURITY_AUTHORIZATION_PERMISSION_RANGER_APP_ID =
       stringBuilder(Name.SECURITY_AUTHORIZATION_PERMISSION_RANGER_APP_ID)
-          .setDefaultValue("alluxio")
+          .setDefaultValue("alluxio-master")
           .setDescription("Ranger application id passed to RangerBasePlugin.")
           .setConsistencyCheckLevel(ConsistencyCheckLevel.ENFORCE)
           .setScope(Scope.MASTER)
@@ -7287,7 +7289,8 @@ public final class PropertyKey implements Comparable<PropertyKey> {
   public static final PropertyKey SECURITY_AUTHORIZATION_PERMISSION_RANGER_RESOURCE_KEY =
       stringBuilder(Name.SECURITY_AUTHORIZATION_PERMISSION_RANGER_RESOURCE_KEY)
           .setDefaultValue("path")
-          .setDescription("Ranger resource key used for Alluxio path matching.")
+          .setDescription("Ranger resource key used in access requests. Defaults to the "
+              + "HDFS-compatible path resource key.")
           .setConsistencyCheckLevel(ConsistencyCheckLevel.ENFORCE)
           .setScope(Scope.MASTER)
           .setIsDynamic(false)

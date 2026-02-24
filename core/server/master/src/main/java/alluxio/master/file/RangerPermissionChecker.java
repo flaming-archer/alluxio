@@ -190,6 +190,7 @@ public class RangerPermissionChecker implements PermissionChecker {
   public static class RangerPluginAuthorizer implements RangerAuthorizer {
     private Object mPlugin;
     private Class<?> mRequestInterface;
+    private String mResourceKey;
 
     @Override
     public void init(AlluxioConfiguration conf) {
@@ -200,6 +201,8 @@ public class RangerPermissionChecker implements PermissionChecker {
             PropertyKey.SECURITY_AUTHORIZATION_PERMISSION_RANGER_APP_ID);
         Class<?> pluginClass =
             Class.forName("org.apache.ranger.plugin.service.RangerBasePlugin");
+        mResourceKey = conf.getString(
+            PropertyKey.SECURITY_AUTHORIZATION_PERMISSION_RANGER_RESOURCE_KEY);
         mPlugin = pluginClass.getConstructor(String.class, String.class)
             .newInstance(serviceType, appId);
         pluginClass.getMethod("init").invoke(mPlugin);
@@ -214,13 +217,11 @@ public class RangerPermissionChecker implements PermissionChecker {
     public boolean isAccessAllowed(String user, List<String> groups, String path,
         String accessType) {
       try {
-        String resourceKey = Configuration.getString(
-            PropertyKey.SECURITY_AUTHORIZATION_PERMISSION_RANGER_RESOURCE_KEY);
         Class<?> resourceClass =
             Class.forName("org.apache.ranger.plugin.policyengine.RangerAccessResourceImpl");
         Object resource = resourceClass.getConstructor().newInstance();
         resourceClass.getMethod("setValue", String.class, String.class)
-            .invoke(resource, resourceKey, path);
+            .invoke(resource, mResourceKey, path);
 
         Class<?> requestClass =
             Class.forName("org.apache.ranger.plugin.policyengine.RangerAccessRequestImpl");
