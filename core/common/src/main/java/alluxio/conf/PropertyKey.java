@@ -7252,8 +7252,52 @@ public final class PropertyKey implements Comparable<PropertyKey> {
           .setDescription("The permission checker implementation used by masters for file system "
               + "authorization. The class must implement "
               + "'alluxio.master.file.PermissionChecker' and provide a constructor that takes "
-              + "'alluxio.master.file.meta.InodeTree'. This can be set to a Ranger-backed "
-              + "implementation to integrate with Apache Ranger.")
+              + "'alluxio.master.file.meta.InodeTree'. Set this to "
+              + "'alluxio.master.file.RangerPermissionChecker' to enforce Ranger policies.")
+          .setConsistencyCheckLevel(ConsistencyCheckLevel.ENFORCE)
+          .setScope(Scope.MASTER)
+          .setIsDynamic(false)
+          .build();
+  public static final PropertyKey SECURITY_AUTHORIZATION_PERMISSION_RANGER_ENABLED =
+      booleanBuilder(Name.SECURITY_AUTHORIZATION_PERMISSION_RANGER_ENABLED)
+          .setDefaultValue(false)
+          .setDescription("Whether to enable Ranger authorization checks inside the permission "
+              + "checker. When enabled, Ranger decisions are applied in addition to native ACL "
+              + "checks.")
+          .setConsistencyCheckLevel(ConsistencyCheckLevel.ENFORCE)
+          .setScope(Scope.MASTER)
+          .setIsDynamic(false)
+          .build();
+  public static final PropertyKey SECURITY_AUTHORIZATION_PERMISSION_RANGER_SERVICE_TYPE =
+      stringBuilder(Name.SECURITY_AUTHORIZATION_PERMISSION_RANGER_SERVICE_TYPE)
+          .setDefaultValue("alluxio")
+          .setDescription("Ranger service type passed to RangerBasePlugin.")
+          .setConsistencyCheckLevel(ConsistencyCheckLevel.ENFORCE)
+          .setScope(Scope.MASTER)
+          .setIsDynamic(false)
+          .build();
+  public static final PropertyKey SECURITY_AUTHORIZATION_PERMISSION_RANGER_APP_ID =
+      stringBuilder(Name.SECURITY_AUTHORIZATION_PERMISSION_RANGER_APP_ID)
+          .setDefaultValue("alluxio")
+          .setDescription("Ranger application id passed to RangerBasePlugin.")
+          .setConsistencyCheckLevel(ConsistencyCheckLevel.ENFORCE)
+          .setScope(Scope.MASTER)
+          .setIsDynamic(false)
+          .build();
+  public static final PropertyKey SECURITY_AUTHORIZATION_PERMISSION_RANGER_RESOURCE_KEY =
+      stringBuilder(Name.SECURITY_AUTHORIZATION_PERMISSION_RANGER_RESOURCE_KEY)
+          .setDefaultValue("path")
+          .setDescription("Ranger resource key used for Alluxio path matching.")
+          .setConsistencyCheckLevel(ConsistencyCheckLevel.ENFORCE)
+          .setScope(Scope.MASTER)
+          .setIsDynamic(false)
+          .build();
+  public static final PropertyKey SECURITY_AUTHORIZATION_PERMISSION_RANGER_AUTHORIZER_CLASS =
+      classBuilder(Name.SECURITY_AUTHORIZATION_PERMISSION_RANGER_AUTHORIZER_CLASS)
+          .setDefaultValue("alluxio.master.file.RangerPermissionChecker$RangerPluginAuthorizer")
+          .setDescription("The Ranger authorizer adapter class used by RangerPermissionChecker. "
+              + "The class must implement "
+              + "'alluxio.master.file.RangerPermissionChecker$RangerAuthorizer'.")
           .setConsistencyCheckLevel(ConsistencyCheckLevel.ENFORCE)
           .setScope(Scope.MASTER)
           .setIsDynamic(false)
@@ -9251,6 +9295,16 @@ public final class PropertyKey implements Comparable<PropertyKey> {
         "alluxio.security.authorization.permission.umask";
     public static final String SECURITY_AUTHORIZATION_PERMISSION_CHECKER_CLASS =
         "alluxio.security.authorization.permission.checker.class";
+    public static final String SECURITY_AUTHORIZATION_PERMISSION_RANGER_ENABLED =
+        "alluxio.security.authorization.permission.ranger.enabled";
+    public static final String SECURITY_AUTHORIZATION_PERMISSION_RANGER_SERVICE_TYPE =
+        "alluxio.security.authorization.permission.ranger.service.type";
+    public static final String SECURITY_AUTHORIZATION_PERMISSION_RANGER_APP_ID =
+        "alluxio.security.authorization.permission.ranger.app.id";
+    public static final String SECURITY_AUTHORIZATION_PERMISSION_RANGER_RESOURCE_KEY =
+        "alluxio.security.authorization.permission.ranger.resource.key";
+    public static final String SECURITY_AUTHORIZATION_PERMISSION_RANGER_AUTHORIZER_CLASS =
+        "alluxio.security.authorization.permission.ranger.authorizer.class";
     public static final String SECURITY_GROUP_MAPPING_CACHE_TIMEOUT_MS =
         "alluxio.security.group.mapping.cache.timeout";
     public static final String SECURITY_GROUP_MAPPING_CLASS =

@@ -65,6 +65,7 @@ import java.time.Clock;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Unit tests for {@link PermissionChecker}.
@@ -152,8 +153,18 @@ public final class PermissionCheckerTest {
   }
 
   /**
-   * Test class implements {@link GroupMappingService} providing user-to-groups mapping.
+   * Fake ranger authorizer for testing.
    */
+  public static class FakeRangerAuthorizer implements RangerPermissionChecker.RangerAuthorizer {
+    private static final AtomicBoolean ALLOW = new AtomicBoolean(true);
+
+    @Override
+    public boolean isAccessAllowed(String user, List<String> groups, String path,
+        String accessType) {
+      return ALLOW.get();
+    }
+  }
+
   public static class FakeUserGroupsMapping implements GroupMappingService {
     private HashMap<String, String> mUserGroups = new HashMap<>();
 
@@ -449,6 +460,28 @@ public final class PermissionCheckerTest {
         TestPermissionChecker.class.getName(), Configuration.modifiableGlobal())) {
       PermissionChecker checker = PermissionChecker.Factory.create(sTree, Configuration.global());
       Assert.assertTrue(checker instanceof TestPermissionChecker);
+    }
+  }
+
+  @Test
+  public void rangerPermissionCheckerDeniesWhenRangerDenies() throws Exception {
+    FakeRangerAuthorizer.ALLOW.set(false);
+    HashMap<PropertyKey, Object> conf = new HashMap<>();
+    conf.put(PropertyKey.SECURITY_AUTHORIZATION_PERMISSION_CHECKER_CLASS,
+        RangerPermissionChecker.class.getName());
+    conf.put(PropertyKey.SECURITY_AUTHORIZATION_PERMISSION_RANGER_ENABLED, true);
+    conf.put(PropertyKey.SECURITY_AUTHORIZATION_PERMISSION_RANGER_AUTHORIZER_CLASS,
+        FakeRangerAuthorizer.class.getName());
+    try (Closeable c = new ConfigurationRule(conf, Configuration.modifiableGlobal())) {
+      PermissionChecker checker = PermissionChecker.Factory.create(sTree, Configuration.global());
+      AuthenticatedClientUser.set(TEST_USER_1.getUser());
+      try (LockedInodePath inodePath = sTree.lockInodePath(new AlluxioURI(TEST_DIR_FILE_URI),
+          LockPattern.READ, NoopJournalContext.INSTANCE)) {
+        mThrown.expect(AccessControlException.class);
+        checker.checkPermission(Mode.Bits.READ, inodePath);
+      }
+    } finally {
+      FakeRangerAuthorizer.ALLOW.set(true);
     }
   }
 
