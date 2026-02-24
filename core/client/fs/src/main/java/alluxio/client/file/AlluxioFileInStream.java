@@ -14,18 +14,23 @@ package alluxio.client.file;
 import alluxio.AlluxioURI;
 import alluxio.annotation.PublicApi;
 import alluxio.client.ReadType;
-import alluxio.client.block.AlluxioBlockStore;
+import alluxio.client.block.BlockStoreClient;
 import alluxio.client.block.stream.BlockInStream;
 import alluxio.client.block.stream.BlockWorkerClient;
 import alluxio.client.file.options.InStreamOptions;
 import alluxio.conf.AlluxioConfiguration;
 import alluxio.conf.PropertyKey;
 import alluxio.exception.PreconditionMessage;
+import alluxio.exception.status.AlluxioStatusException;
+import alluxio.exception.status.OutOfRangeException;
 import alluxio.grpc.CacheRequest;
+import alluxio.grpc.FileSystemMasterCommonPOptions;
+import alluxio.grpc.ListStatusPOptions;
 import alluxio.resource.CloseableResource;
+import alluxio.retry.ExponentialTimeBoundedRetry;
 import alluxio.retry.RetryPolicy;
-import alluxio.retry.RetryUtils;
 import alluxio.util.CommonUtils;
+import alluxio.util.FileSystemOptionsUtils;
 import alluxio.wire.BlockInfo;
 import alluxio.wire.BlockLocation;
 import alluxio.wire.WorkerNetAddress;
@@ -34,6 +39,8 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Supplier;
 import com.google.common.io.Closer;
+import io.grpc.StatusRuntimeException;
+import io.netty.util.internal.OutOfDirectMemoryError;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -41,7 +48,9 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import javax.annotation.concurrent.NotThreadSafe;
 
 /**
@@ -70,9 +79,10 @@ public class AlluxioFileInStream extends FileInStream {
   private Supplier<RetryPolicy> mRetryPolicySupplier;
   private final URIStatus mStatus;
   private final InStreamOptions mOptions;
-  private final AlluxioBlockStore mBlockStore;
+  private final BlockStoreClient mBlockStore;
   private final FileSystemContext mContext;
   private final boolean mPassiveCachingEnabled;
+  private final long mStatusOutdatedTime;
 
   /* Convenience values derived from mStatus, use these instead of querying mStatus. */
   /** Length of the file in bytes. */
@@ -114,11 +124,17 @@ public class AlluxioFileInStream extends FileInStream {
           conf.getDuration(PropertyKey.USER_BLOCK_READ_RETRY_SLEEP_MIN);
       final Duration blockReadRetrySleepMax =
           conf.getDuration(PropertyKey.USER_BLOCK_READ_RETRY_SLEEP_MAX);
-      mRetryPolicySupplier = () -> RetryUtils.defaultBlockReadRetry(
-          blockReadRetryMaxDuration, blockReadRetrySleepBase, blockReadRetrySleepMax);
+      mRetryPolicySupplier =
+          () -> ExponentialTimeBoundedRetry.builder()
+              .withMaxDuration(blockReadRetryMaxDuration)
+              .withInitialSleep(blockReadRetrySleepBase)
+              .withMaxSleep(blockReadRetrySleepMax)
+              .withSkipInitialSleep().build();
       mStatus = status;
+      mStatusOutdatedTime = System.currentTimeMillis()
+          + conf.getMs(PropertyKey.USER_FILE_IN_STREAM_STATUS_EXPIRATION_TIME);
       mOptions = options;
-      mBlockStore = AlluxioBlockStore.create(mContext);
+      mBlockStore = BlockStoreClient.create(mContext);
       mLength = mStatus.getLength();
       mBlockSize = mStatus.getBlockSizeBytes();
       mPosition = 0;
@@ -157,6 +173,9 @@ public class AlluxioFileInStream extends FileInStream {
         if (mBlockInStream != null) {
           handleRetryableException(mBlockInStream, e);
           mBlockInStream = null;
+        }
+        if (e instanceof OutOfRangeException) {
+          refreshMetadataOnMismatchedLength((OutOfRangeException) e);
         }
       }
     }
@@ -198,12 +217,42 @@ public class AlluxioFileInStream extends FileInStream {
           handleRetryableException(mBlockInStream, e);
           mBlockInStream = null;
         }
+        if (e instanceof OutOfRangeException) {
+          refreshMetadataOnMismatchedLength((OutOfRangeException) e);
+        }
       }
     }
     if (lastException != null) {
       throw lastException;
     }
     return len - bytesLeft;
+  }
+
+  // When Alluxio detects the underlying file length has changed,
+  // force a sync to update the latest metadata, then abort the current stream
+  // The user should restart the stream and read the updated file
+  private void refreshMetadataOnMismatchedLength(OutOfRangeException e) {
+    try (CloseableResource<FileSystemMasterClient> client =
+        mContext.acquireMasterClientResource()) {
+      // Force refresh the file metadata by loadMetadata
+      AlluxioURI path = new AlluxioURI(mStatus.getPath());
+      ListStatusPOptions refreshPathOptions = ListStatusPOptions.newBuilder()
+          .setCommonOptions(
+              FileSystemMasterCommonPOptions.newBuilder().setSyncIntervalMs(0).build())
+          .setLoadMetadataOnly(true)
+          .build();
+      ListStatusPOptions mergedOptions = FileSystemOptionsUtils.listStatusDefaults(
+          mContext.getPathConf(path)).toBuilder().mergeFrom(refreshPathOptions).build();
+      client.get().listStatus(path, mergedOptions);
+      LOG.info("Notified the master that {} should be sync-ed with UFS on the next access",
+          mStatus.getPath());
+      throw new IllegalStateException(e.getMessage());
+    } catch (AlluxioStatusException x) {
+      String msg = String.format("Failed to force a metadata sync on path %s. "
+          + "Please manually sync metadata by `bin/alluxio fs loadMetadata -f {path}` "
+          + "before you retry reading this file.", mStatus.getPath());
+      throw new IllegalStateException(msg, e);
+    }
   }
 
   @Override
@@ -256,11 +305,15 @@ public class AlluxioFileInStream extends FileInStream {
       try {
         // Positioned read may be called multiple times for the same block. Caching the in-stream
         // allows us to avoid the block store rpc to open a new stream for each call.
+        BlockInfo blockInfo = isStatusOutdated() || lastException != null
+            ? mBlockStore.getInfo(blockId) : mStatus.getBlockInfo(blockId);
         if (mCachedPositionedReadStream == null) {
-          mCachedPositionedReadStream = mBlockStore.getInStream(blockId, mOptions, mFailedWorkers);
+          mCachedPositionedReadStream = mBlockStore.getInStream(
+              blockInfo, mOptions, mFailedWorkers);
         } else if (mCachedPositionedReadStream.getId() != blockId) {
           closeBlockInStream(mCachedPositionedReadStream);
-          mCachedPositionedReadStream = mBlockStore.getInStream(blockId, mOptions, mFailedWorkers);
+          mCachedPositionedReadStream = mBlockStore.getInStream(
+              blockInfo, mOptions, mFailedWorkers);
         }
         long offset = pos % mBlockSize;
         int bytesRead = mCachedPositionedReadStream.positionedRead(offset, b, off,
@@ -344,6 +397,7 @@ public class AlluxioFileInStream extends FileInStream {
       throw new IOException("No BlockInfo for block(id=" + blockId + ") of file"
           + "(id=" + mStatus.getFileId() + ", path=" + mStatus.getPath() + ")");
     }
+
     // Create stream
     boolean isBlockInfoOutdated = true;
     // blockInfo is "outdated" when all the locations in that blockInfo are failed workers,
@@ -351,14 +405,15 @@ public class AlluxioFileInStream extends FileInStream {
     if (mFailedWorkers.isEmpty() || mFailedWorkers.size() < blockInfo.getLocations().size()) {
       isBlockInfoOutdated = false;
     } else {
-      for (BlockLocation location : blockInfo.getLocations()) {
+      List<BlockLocation> locs = blockInfo.getLocations();
+      for (BlockLocation location : locs) {
         if (!mFailedWorkers.containsKey(location.getWorkerAddress())) {
           isBlockInfoOutdated = false;
           break;
         }
       }
     }
-    if (isBlockInfoOutdated) {
+    if (isBlockInfoOutdated || isStatusOutdated()) {
       mBlockInStream = mBlockStore.getInStream(blockId, mOptions, mFailedWorkers);
     } else {
       mBlockInStream = mBlockStore.getInStream(blockInfo, mOptions, mFailedWorkers);
@@ -368,6 +423,14 @@ public class AlluxioFileInStream extends FileInStream {
     mBlockInStream.seek(offset);
   }
 
+  /**
+   * @return true if the status is outdated
+   */
+  @VisibleForTesting
+  public boolean isStatusOutdated() {
+    return System.currentTimeMillis() >= mStatusOutdatedTime;
+  }
+
   private void closeBlockInStream(BlockInStream stream) throws IOException {
     if (stream != null) {
       BlockInStream.BlockInStreamSource blockSource = stream.getSource();
@@ -375,6 +438,9 @@ public class AlluxioFileInStream extends FileInStream {
       // TODO(calvin): we should be able to do a close check instead of using null
       if (stream == mBlockInStream) { // if stream is instance variable, set to null
         mBlockInStream = null;
+      }
+      if (stream == mCachedPositionedReadStream) {
+        mCachedPositionedReadStream = null;
       }
       if (blockSource == BlockInStream.BlockInStreamSource.NODE_LOCAL
           || blockSource == BlockInStream.BlockInStreamSource.PROCESS_LOCAL) {
@@ -417,7 +483,7 @@ public class AlluxioFileInStream extends FileInStream {
                 .setSourceHost(host).setSourcePort(dataSource.getDataPort())
                 .setAsync(true).build();
         if (mPassiveCachingEnabled && mContext.hasProcessLocalWorker()) {
-          mContext.getProcessLocalWorker().cache(request);
+          mContext.getProcessLocalWorker().orElseThrow(NullPointerException::new).cache(request);
           mLastBlockIdCached = blockId;
           return true;
         }
@@ -425,7 +491,13 @@ public class AlluxioFileInStream extends FileInStream {
         if (mPassiveCachingEnabled && mContext.hasNodeLocalWorker()) {
           // send request to local worker
           worker = mContext.getNodeLocalWorker();
-        } else { // send request to data source
+        } else {
+          if (blockInfo.getLocations().stream()
+              .anyMatch(it -> Objects.equals(it.getWorkerAddress(), dataSource))) {
+            mLastBlockIdCached = blockId;
+            return false;
+          }
+          // send request to data source
           worker = dataSource;
         }
         try (CloseableResource<BlockWorkerClient> blockWorker =
@@ -444,9 +516,18 @@ public class AlluxioFileInStream extends FileInStream {
 
   private void handleRetryableException(BlockInStream stream, IOException e) {
     WorkerNetAddress workerAddress = stream.getAddress();
-    LOG.warn("Failed to read block {} of file {} from worker {}. "
-        + "This worker will be skipped for future read operations, will retry: {}.",
-        stream.getId(), mStatus.getPath(), workerAddress, e.toString());
+
+    boolean causedByClientOOM = (e.getCause() instanceof StatusRuntimeException)
+        && (e.getCause().getCause() instanceof OutOfDirectMemoryError);
+    if (causedByClientOOM) {
+      LOG.warn("Failed to read block {} of file {} from worker {}, will retry: {}.",
+          stream.getId(), mStatus.getPath(), workerAddress, e.toString());
+    } else {
+      LOG.warn("Failed to read block {} of file {} from worker {}. "
+              + "This worker will be skipped for future read operations, will retry: {}.",
+          stream.getId(), mStatus.getPath(), workerAddress, e.toString());
+    }
+
     try {
       stream.close();
     } catch (Exception ex) {
@@ -455,6 +536,18 @@ public class AlluxioFileInStream extends FileInStream {
           stream.getId(), mStatus.getPath(), ex.toString());
     }
     // TODO(lu) consider recovering failed workers
-    mFailedWorkers.put(workerAddress, System.currentTimeMillis());
+    if (!causedByClientOOM) {
+      mFailedWorkers.put(workerAddress, System.currentTimeMillis());
+    }
+  }
+
+  @Override
+  public void unbuffer() {
+    if (mBlockInStream != null) {
+      mBlockInStream.unbuffer();
+    }
+    if (mCachedPositionedReadStream != null) {
+      mCachedPositionedReadStream.unbuffer();
+    }
   }
 }

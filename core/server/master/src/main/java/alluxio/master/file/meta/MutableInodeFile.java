@@ -29,9 +29,9 @@ import alluxio.util.proto.ProtoUtils;
 import alluxio.wire.FileInfo;
 
 import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableSet;
 
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
 import javax.annotation.concurrent.NotThreadSafe;
 
@@ -111,6 +111,7 @@ public final class MutableInodeFile extends MutableInode<MutableInodeFile>
     ret.setReplicationMin(getReplicationMin());
     ret.setUfsFingerprint(getUfsFingerprint());
     ret.setAcl(mAcl);
+    ret.setXAttr(getXAttr());
     return ret;
   }
 
@@ -417,7 +418,9 @@ public final class MutableInodeFile extends MutableInode<MutableInodeFile>
       ret.setXAttr(CommonUtils.convertFromByteString(entry.getXAttrMap()));
     }
 
-    ret.setMediumTypes(new HashSet<>(entry.getMediumTypeList()));
+    if (!entry.getMediumTypeList().isEmpty()) {
+      ret.setMediumTypes(ImmutableSet.copyOf(entry.getMediumTypeList()));
+    }
     return ret;
   }
 
@@ -436,8 +439,8 @@ public final class MutableInodeFile extends MutableInode<MutableInodeFile>
     CreateFilePOptionsOrBuilder options = context.getOptions();
     Preconditions.checkArgument(
         options.getReplicationMax() == Constants.REPLICATION_MAX_INFINITY
-        || options.getReplicationMax() >= options.getReplicationMin());
-    return new MutableInodeFile(blockContainerId)
+            || options.getReplicationMax() >= options.getReplicationMin());
+    MutableInodeFile inodeFile = new MutableInodeFile(blockContainerId)
         .setBlockSizeBytes(options.getBlockSizeBytes())
         .setCreationTimeMs(creationTimeMs)
         .setName(name)
@@ -459,6 +462,15 @@ public final class MutableInodeFile extends MutableInode<MutableInodeFile>
             ? Constants.NO_AUTO_PERSIST :
             System.currentTimeMillis() + options.getPersistenceWaitTime())
         .setXAttr(context.getXAttr());
+    if (context.getFingerprint() != null) {
+      inodeFile.setUfsFingerprint(context.getFingerprint());
+    }
+    if (context.getCompleteFileInfo() != null) {
+      inodeFile.setBlockIds(context.getCompleteFileInfo().getBlockIds());
+      inodeFile.setCompleted(true);
+      inodeFile.setLength(context.getCompleteFileInfo().getLength());
+    }
+    return inodeFile;
   }
 
   @Override
@@ -542,8 +554,10 @@ public final class MutableInodeFile extends MutableInode<MutableInodeFile>
         .setReplicationMin(inode.getReplicationMin())
         .setPersistJobId(inode.getPersistJobId())
         .setShouldPersistTime(inode.getShouldPersistTime())
-        .setTempUfsPath(inode.getPersistJobTempUfsPath())
-        .setMediumTypes(new HashSet<>(inode.getMediumTypeList()));
+        .setTempUfsPath(inode.getPersistJobTempUfsPath());
+    if (!inode.getMediumTypeList().isEmpty()) {
+      f.setMediumTypes(ImmutableSet.copyOf(inode.getMediumTypeList()));
+    }
     if (inode.getXAttrCount() > 0) {
       f.setXAttr(CommonUtils.convertFromByteString(inode.getXAttrMap()));
     }

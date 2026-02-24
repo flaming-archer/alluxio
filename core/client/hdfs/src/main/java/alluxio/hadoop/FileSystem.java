@@ -15,7 +15,6 @@ import alluxio.AlluxioURI;
 import alluxio.Constants;
 import alluxio.client.file.URIStatus;
 import alluxio.conf.PropertyKey;
-import alluxio.exception.PreconditionMessage;
 import alluxio.uri.Authority;
 import alluxio.uri.EmbeddedLogicalAuthority;
 import alluxio.uri.MultiMasterAuthority;
@@ -42,7 +41,7 @@ import javax.annotation.concurrent.NotThreadSafe;
  * native API defined in {@link alluxio.client.file.FileSystem}, which this API is built on top of.
  */
 @NotThreadSafe
-public final class FileSystem extends AbstractFileSystem {
+public class FileSystem extends AbstractFileSystem {
   /**
    * Constructs a new {@link FileSystem}.
    */
@@ -144,7 +143,7 @@ public final class FileSystem extends AbstractFileSystem {
   @Override
   protected void validateFsUri(URI fsUri) throws IOException, IllegalArgumentException {
     Preconditions.checkArgument(fsUri.getScheme().equals(getScheme()),
-            PreconditionMessage.URI_SCHEME_MISMATCH.toString(), fsUri.getScheme(), getScheme());
+        "URI scheme %s does not match the expected scheme %s", fsUri.getScheme(), getScheme());
 
     Authority auth = Authority.fromString(fsUri.getAuthority());
     if (auth instanceof UnknownAuthority) {

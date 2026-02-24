@@ -21,7 +21,7 @@ import java.io.IOException;
  */
 public class StoreBlockWriter extends LocalFileBlockWriter {
   /** Temp block meta for the writer. */
-  protected final TempBlockMeta mBlockMeta;
+  private final TempBlockMeta mBlockMeta;
 
   /**
    * Creates new block writer for block store.
@@ -29,7 +29,7 @@ public class StoreBlockWriter extends LocalFileBlockWriter {
    * @param blockMeta temp block meta
    * @throws IOException
    */
-  public StoreBlockWriter(TempBlockMeta blockMeta) throws IOException {
+  public StoreBlockWriter(TempBlockMeta blockMeta) {
     super(blockMeta.getPath());
     mBlockMeta = blockMeta;
     if (mBlockMeta.getSessionId() > 0) {

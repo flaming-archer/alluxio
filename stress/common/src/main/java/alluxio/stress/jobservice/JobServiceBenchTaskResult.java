@@ -14,7 +14,6 @@ package alluxio.stress.jobservice;
 import alluxio.stress.BaseParameters;
 import alluxio.stress.TaskResult;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -48,12 +47,24 @@ public final class JobServiceBenchTaskResult implements TaskResult {
    * @param result  the task result to merge
    */
   public void merge(JobServiceBenchTaskResult result) throws Exception {
+    // When merging results within a node, we need to merge all the error information.
+    mErrors.addAll(result.mErrors);
+    aggregateByWorker(result);
+  }
+
+  /**
+   * Merges (updates) a task result with this result except the error information.
+   *
+   * @param result the task result to merge
+   */
+  public void aggregateByWorker(JobServiceBenchTaskResult result) throws Exception {
+    // When merging result from different workers, we don't need to merge the error information
+    // since we will keep all the result information in a map.
     mStatistics.merge(result.mStatistics);
     mRecordStartMs = Math.min(mRecordStartMs, result.mRecordStartMs);
     mEndMs = Math.max(mEndMs, result.mEndMs);
     mBaseParameters = result.mBaseParameters;
     mParameters = result.mParameters;
-    mErrors.addAll(result.mErrors);
     for (Map.Entry<String, JobServiceBenchTaskResultStatistics> entry :
         result.mStatisticsPerMethod.entrySet()) {
       final String key = entry.getKey();
@@ -73,12 +84,10 @@ public final class JobServiceBenchTaskResult implements TaskResult {
    * @param numSuccess the amount to increment by
    */
   public void incrementNumSuccess(long numSuccess) {
-    mStatistics.mNumSuccess += numSuccess;
+    mStatistics.mNumSuccesses += numSuccess;
   }
 
-  /**
-   * @return the base parameters
-   */
+  @Override
   public BaseParameters getBaseParameters() {
     return mBaseParameters;
   }
@@ -146,9 +155,7 @@ public final class JobServiceBenchTaskResult implements TaskResult {
     mEndMs = endMs;
   }
 
-  /**
-   * @return the list of errors
-   */
+  @Override
   public List<String> getErrors() {
     return mErrors;
   }
@@ -215,31 +222,20 @@ public final class JobServiceBenchTaskResult implements TaskResult {
     @Override
     public JobServiceBenchSummary aggregate(Iterable<JobServiceBenchTaskResult> results)
         throws Exception {
-      List<String> nodes = new ArrayList<>();
-      Map<String, List<String>> errors = new HashMap<>();
+      Map<String, JobServiceBenchTaskResult> nodes = new HashMap<>();
       JobServiceBenchTaskResult mergingTaskResult = null;
 
-      for (TaskResult taskResult : results) {
-        if (!(taskResult instanceof JobServiceBenchTaskResult)) {
-          throw new IOException(
-              "TaskResult is not of type JobServiceBenchTaskResult. class: " + taskResult.getClass()
-                  .getName());
-        }
-        JobServiceBenchTaskResult result = (JobServiceBenchTaskResult) taskResult;
-        nodes.add(result.getBaseParameters().mId);
-        if (!result.getErrors().isEmpty()) {
-          List<String> errorList = new ArrayList<>(result.getErrors());
-          errors.put(result.getBaseParameters().mId, errorList);
-        }
+      for (JobServiceBenchTaskResult taskResult : results) {
+        nodes.put(taskResult.getBaseParameters().mId, taskResult);
 
         if (mergingTaskResult == null) {
-          mergingTaskResult = result;
+          mergingTaskResult = taskResult;
           continue;
         }
-        mergingTaskResult.merge(result);
+        mergingTaskResult.aggregateByWorker(taskResult);
       }
 
-      return new JobServiceBenchSummary(mergingTaskResult, nodes, errors);
+      return new JobServiceBenchSummary(mergingTaskResult, nodes);
     }
   }
 }

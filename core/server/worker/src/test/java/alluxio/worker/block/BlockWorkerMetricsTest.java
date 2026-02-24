@@ -16,15 +16,14 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import alluxio.Constants;
-import alluxio.StorageTierAssoc;
-import alluxio.WorkerStorageTierAssoc;
+import alluxio.conf.Configuration;
+import alluxio.conf.PropertyKey;
 import alluxio.metrics.MetricInfo;
 import alluxio.metrics.MetricKey;
 import alluxio.metrics.MetricsSystem;
 import alluxio.worker.block.DefaultBlockWorker.Metrics;
 
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Lists;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
@@ -41,29 +40,35 @@ public final class BlockWorkerMetricsTest {
 
   @Before
   public void before() throws Exception {
+    Configuration.set(PropertyKey.WORKER_TIERED_STORE_LEVELS, 2);
+    Configuration.set(PropertyKey.Template.WORKER_TIERED_STORE_LEVEL_ALIAS.format(0), MEM);
+    Configuration.set(PropertyKey.Template.WORKER_TIERED_STORE_LEVEL_ALIAS.format(1), HDD);
     MetricsSystem.clearAllMetrics();
     mBlockWorker = mock(BlockWorker.class);
     mBlockStoreMeta = mock(BlockStoreMeta.class);
     when(mBlockWorker.getStoreMeta()).thenReturn(mBlockStoreMeta);
-    StorageTierAssoc assoc = new WorkerStorageTierAssoc(Lists.newArrayList(MEM, HDD));
-    when(mBlockStoreMeta.getStorageTierAssoc()).thenReturn(assoc);
+    when(mBlockWorker.getStoreMetaFull()).thenReturn(mBlockStoreMeta);
     Metrics.registerGauges(mBlockWorker);
   }
 
   @Test
-  public void testMetricsCapacity() {
+  public void testMetricsCapacity() throws InterruptedException {
     when(mBlockStoreMeta.getCapacityBytes()).thenReturn(1000L);
     Assert.assertEquals(1000L, getGauge(MetricKey.WORKER_CAPACITY_TOTAL.getName()));
     when(mBlockStoreMeta.getUsedBytes()).thenReturn(200L);
+    // sleep 5 seconds because the timeout of this registered is CacheGauge,
+    // and it's update interval is 5 seconds
+    Thread.sleep(DefaultBlockWorker.CACHEGAUGE_UPDATE_INTERVAL);
     Assert.assertEquals(200L, getGauge(MetricKey.WORKER_CAPACITY_USED.getName()));
     Assert.assertEquals(800L, getGauge(MetricKey.WORKER_CAPACITY_FREE.getName()));
   }
 
   @Test
-  public void testMetricsTierCapacity() {
+  public void testMetricsTierCapacity() throws InterruptedException {
     when(mBlockStoreMeta.getCapacityBytesOnTiers())
         .thenReturn(ImmutableMap.of(MEM, 1000L, HDD, 2000L));
     when(mBlockStoreMeta.getUsedBytesOnTiers()).thenReturn(ImmutableMap.of(MEM, 100L, HDD, 200L));
+    Thread.sleep(DefaultBlockWorker.CACHEGAUGE_UPDATE_INTERVAL);
     assertEquals(1000L,
         getGauge(MetricKey.WORKER_CAPACITY_TOTAL.getName() + MetricInfo.TIER + MEM));
     assertEquals(2000L,
@@ -74,6 +79,7 @@ public final class BlockWorkerMetricsTest {
     assertEquals(1800L, getGauge(MetricKey.WORKER_CAPACITY_FREE.getName() + MetricInfo.TIER + HDD));
   }
 
+  @Test
   public void testMetricBocksCached() {
     when(mBlockStoreMeta.getNumberOfBlocks()).thenReturn(200);
     Assert.assertEquals(200, getGauge(MetricKey.WORKER_BLOCKS_CACHED.getName()));

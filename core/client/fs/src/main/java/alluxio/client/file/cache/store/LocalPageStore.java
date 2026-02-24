@@ -11,28 +11,32 @@
 
 package alluxio.client.file.cache.store;
 
+import static alluxio.client.file.cache.store.PageStoreDir.getFileBucket;
+
 import alluxio.client.file.cache.PageId;
-import alluxio.client.file.cache.PageInfo;
 import alluxio.client.file.cache.PageStore;
+import alluxio.exception.PageCorruptedException;
 import alluxio.exception.PageNotFoundException;
 import alluxio.exception.status.ResourceExhaustedException;
+import alluxio.file.ReadTargetBuffer;
+import alluxio.network.protocol.databuffer.DataFileChannel;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.apache.commons.io.FileUtils;
 
+import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.RandomAccessFile;
+import java.nio.ByteBuffer;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-import java.util.stream.Stream;
-import javax.annotation.Nullable;
+import java.nio.file.StandardCopyOption;
 import javax.annotation.concurrent.NotThreadSafe;
 
 /**
@@ -41,98 +45,110 @@ import javax.annotation.concurrent.NotThreadSafe;
  */
 @NotThreadSafe
 public class LocalPageStore implements PageStore {
-  private static final Logger LOG = LoggerFactory.getLogger(LocalPageStore.class);
   private static final String ERROR_NO_SPACE_LEFT = "No space left on device";
-  private final String mRoot;
+  public static final String TEMP_DIR = "TEMP";
+  private final Path mRoot;
   private final long mPageSize;
   private final long mCapacity;
   private final int mFileBuckets;
-  private final Pattern mPagePattern;
 
   /**
    * Creates a new instance of {@link LocalPageStore}.
    *
    * @param options options for the local page store
    */
-  public LocalPageStore(LocalPageStoreOptions options) {
+  public LocalPageStore(PageStoreOptions options) {
     mRoot = options.getRootDir();
     mPageSize = options.getPageSize();
     mCapacity = (long) (options.getCacheSize() / (1 + options.getOverheadRatio()));
     mFileBuckets = options.getFileBuckets();
-    // normalize the path to deal with trailing slash
-    Path rootDir = Paths.get(mRoot);
-    // pattern encoding root_path/page_size(ulong)/bucket(uint)/file_id(str)/page_idx(ulong)/
-    mPagePattern = Pattern.compile(
-        String.format("%s/%d/(\\d+)/([^/]+)/(\\d+)", Pattern.quote(rootDir.toString()), mPageSize));
   }
 
   @Override
-  public void put(PageId pageId, byte[] page) throws ResourceExhaustedException, IOException {
-    Path p = getFilePath(pageId);
+  public void put(PageId pageId,
+      ByteBuffer page,
+      boolean isTemporary) throws ResourceExhaustedException, IOException {
+    Path pagePath = getPagePath(pageId, isTemporary);
     try {
-      if (!Files.exists(p)) {
-        Path parent =
-            Preconditions.checkNotNull(p.getParent(), "parent of cache file should not be null");
+      LOG.debug("Put page: {}, page's position: {}, page's limit: {}, page's capacity: {}",
+          pageId, page.position(), page.limit(), page.capacity());
+      if (!Files.exists(pagePath)) {
+        Path parent = Preconditions.checkNotNull(pagePath.getParent(),
+            "parent of cache file should not be null");
         Files.createDirectories(parent);
-        Files.createFile(p);
       }
       // extra try to ensure output stream is closed
-      try (FileOutputStream fos = new FileOutputStream(p.toFile(), false)) {
-        fos.write(page);
+      try (FileOutputStream fos = new FileOutputStream(pagePath.toFile(), false)) {
+        fos.getChannel().write(page);
       }
-    } catch (Exception e) {
-      Files.deleteIfExists(p);
-      if (e.getMessage().contains(ERROR_NO_SPACE_LEFT)) {
+    } catch (Throwable t) {
+      Files.deleteIfExists(pagePath);
+      if (t.getMessage() != null && t.getMessage().contains(ERROR_NO_SPACE_LEFT)) {
         throw new ResourceExhaustedException(
-            String.format("%s is full, configured with %d bytes", mRoot, mCapacity), e);
+            String.format("%s is full, configured with %d bytes", mRoot, mCapacity), t);
       }
-      throw new IOException("Failed to write file " + p + " for page " + pageId);
+      throw new IOException("Failed to write file " + pagePath + " for page " + pageId, t);
     }
   }
 
   @Override
-  public int get(PageId pageId, int pageOffset, int bytesToRead, byte[] buffer, int bufferOffset)
-      throws IOException, PageNotFoundException {
+  public int get(PageId pageId, int pageOffset, int bytesToRead, ReadTargetBuffer target,
+      boolean isTemporary) throws IOException, PageNotFoundException {
     Preconditions.checkArgument(pageOffset >= 0, "page offset should be non-negative");
-    Preconditions.checkArgument(buffer.length >= bufferOffset,
-        "page offset %s should be " + "less or equal than buffer length %s", bufferOffset,
-        buffer.length);
-    Path p = getFilePath(pageId);
-    if (!Files.exists(p)) {
-      throw new PageNotFoundException(p.toString());
+    Preconditions.checkArgument(bytesToRead >= 0, "bytes to read should be non-negative");
+    if (target.remaining() == 0 || bytesToRead == 0) {
+      return 0;
     }
-    long pageLength = p.toFile().length();
-    Preconditions.checkArgument(pageOffset <= pageLength, "page offset %s exceeded page size %s",
-        pageOffset, pageLength);
-    try (RandomAccessFile localFile = new RandomAccessFile(p.toString(), "r")) {
+    Path pagePath = getPagePath(pageId, isTemporary);
+    try (RandomAccessFile localFile = new RandomAccessFile(pagePath.toString(), "r")) {
+      long pageLength = localFile.length();
+      if (pageOffset + bytesToRead > pageLength) {
+        throw new PageCorruptedException(String.format(
+            "The page %s (%s) probably has been corrupted, "
+                + "page-offset %s, bytes to read %s, page file length %s",
+            pageId, pagePath, pageOffset, bytesToRead, pageLength));
+      }
       int bytesSkipped = localFile.skipBytes(pageOffset);
       if (pageOffset != bytesSkipped) {
         throw new IOException(
-            String.format("Failed to read page %s (%s) from offset %s: %s bytes skipped", pageId, p,
-                pageOffset, bytesSkipped));
+            String.format("Failed to read page %s (%s) from offset %s: %s bytes skipped",
+                pageId, pagePath, pageOffset, bytesSkipped));
       }
       int bytesRead = 0;
-      int bytesLeft = (int) Math.min(pageLength - pageOffset, buffer.length - bufferOffset);
-      bytesLeft = Math.min(bytesLeft, bytesToRead);
-      while (bytesLeft >= 0) {
-        int bytes = localFile.read(buffer, bufferOffset + bytesRead, bytesLeft);
+      int bytesLeft = Math.min((int) target.remaining(), bytesToRead);
+      while (bytesLeft > 0) {
+        int bytes = target.readFromFile(localFile, bytesLeft);
         if (bytes <= 0) {
           break;
         }
         bytesRead += bytes;
         bytesLeft -= bytes;
       }
+      if (bytesRead == 0) {
+        SAMPLING_LOG.warn("Read 0 bytes from page {}, the page is probably empty", pageId);
+        // no bytes have been read at all, but the requested length > 0
+        // this means the file is empty
+        return -1;
+      }
       return bytesRead;
+    } catch (FileNotFoundException e) {
+      throw new PageNotFoundException(pagePath.toString());
     }
   }
 
-  @Override
-  public void delete(PageId pageId) throws IOException, PageNotFoundException {
-    Path p = getFilePath(pageId);
-    if (!Files.exists(p)) {
-      throw new PageNotFoundException(p.toString());
+  /**
+   *
+   * @param pageId page identifier
+   * @param isTemporary whether is to delete a temporary page or not
+   * @throws IOException
+   * @throws PageNotFoundException
+   */
+  public void delete(PageId pageId, boolean isTemporary) throws IOException, PageNotFoundException {
+    Path pagePath = getPagePath(pageId, isTemporary);
+    if (!Files.exists(pagePath)) {
+      throw new PageNotFoundException(pagePath.toString());
     }
-    Files.delete(p);
+    Files.delete(pagePath);
     // Cleaning up parent directory may lead to a race condition if one thread is removing a page as
     // well as its parent dir corresponding to the fileId, while another thread is adding
     // a different page from the same file in the same directory.
@@ -144,87 +160,99 @@ public class LocalPageStore implements PageStore {
     // TODO(binfan): remove the coupled fileId/pagIdex encoding with storage path, so the total
     // number of directories can be bounded.
     Path parent =
-        Preconditions.checkNotNull(p.getParent(), "parent of cache file should not be null");
+        Preconditions.checkNotNull(pagePath.getParent(), "parent of cache file should not be null");
     try (DirectoryStream<Path> stream = Files.newDirectoryStream(parent)) {
       if (!stream.iterator().hasNext()) {
         Files.delete(parent);
       }
+    } catch (NoSuchFileException e) {
+      //Parent path is deleted by other thread in a benign race, ignore exception and continue
+      if (LOG.isDebugEnabled()) {
+        LOG.debug("Parent path is deleted by other thread, ignore and continue.", e);
+      }
     }
+  }
+
+  @Override
+  public void commit(String fileId, String newFileId) throws IOException {
+    Path filePath = getFilePath(newFileId);
+    Path bucketPath = Preconditions.checkNotNull(filePath.getParent(),
+        "%s does not have a parent path", filePath);
+    if (!Files.exists(bucketPath)) {
+      Files.createDirectories(bucketPath);
+    }
+    Files.move(
+        getTempFilePath(fileId),
+        filePath, StandardCopyOption.ATOMIC_MOVE);
+  }
+
+  @Override
+  public void abort(String fileId) throws IOException {
+    FileUtils.deleteDirectory(getTempFilePath(fileId).toFile());
+  }
+
+  private Path getTempFilePath(String fileId) {
+    return Paths.get(mRoot.toString(), Long.toString(mPageSize), TEMP_DIR, fileId);
+  }
+
+  private Path getFilePath(String fileId) {
+    return Paths.get(mRoot.toString(), Long.toString(mPageSize),
+        getFileBucket(mFileBuckets, fileId), fileId);
   }
 
   /**
    * @param pageId page Id
+   * @param isTemporary
    * @return the local file system path to store this page
    */
   @VisibleForTesting
-  public Path getFilePath(PageId pageId) {
+  public Path getPagePath(PageId pageId, boolean isTemporary) {
     // TODO(feng): encode fileId with URLEncoder to escape invalid characters for file name
-    return Paths.get(mRoot, Long.toString(mPageSize), getFileBucket(pageId.getFileId()),
-        pageId.getFileId(), Long.toString(pageId.getPageIndex()));
+    Path filePath =
+        isTemporary ? getTempFilePath(pageId.getFileId()) : getFilePath(pageId.getFileId());
+    return filePath.resolve(Long.toString(pageId.getPageIndex()));
   }
 
-  private String getFileBucket(String fileId) {
-    return Integer.toString(Math.floorMod(fileId.hashCode(), mFileBuckets));
-  }
-
-  /**
-   * @param path path of a file
-   * @return the corresponding page id, or null if the file name does not match the pattern
-   */
-  @Nullable
-  private PageId getPageId(Path path) {
-    Matcher matcher = mPagePattern.matcher(path.toString());
-    if (!matcher.matches()) {
-      return null;
+  @Override
+  public DataFileChannel getDataFileChannel(
+      PageId pageId, int pageOffset, int bytesToRead, boolean isTemporary)
+      throws PageNotFoundException {
+    Preconditions.checkArgument(pageOffset >= 0,
+        "page offset should be non-negative");
+    Preconditions.checkArgument(!isTemporary,
+        "cannot acquire a data file channel to a temporary page");
+    Path pagePath = getPagePath(pageId, isTemporary);
+    File pageFile = pagePath.toFile();
+    if (!pageFile.exists()) {
+      throw new PageNotFoundException(pagePath.toString());
     }
-    try {
-      String fileBucket = Preconditions.checkNotNull(matcher.group(1));
-      String fileId = Preconditions.checkNotNull(matcher.group(2));
-      if (!fileBucket.equals(getFileBucket(fileId))) {
-        return null;
+
+    long fileLength = pageFile.length();
+    if (fileLength == 0 && pageId.getPageIndex() > 0) {
+      // pages other than the first page should always be non-empty
+      // remove this malformed page
+      SAMPLING_LOG.warn("Length of page {} is 0, removing this malformed page", pageId);
+      try {
+        Files.deleteIfExists(pagePath);
+      } catch (IOException ignored) {
+        // do nothing
       }
-      String fileName = Preconditions.checkNotNull(matcher.group(3));
-      long pageIndex = Long.parseLong(fileName);
-      return new PageId(fileId, pageIndex);
-    } catch (NumberFormatException e) {
-      return null;
+      throw new PageNotFoundException(pagePath.toString());
     }
-  }
+    if (fileLength < pageOffset) {
+      throw new IllegalArgumentException(
+          String.format("offset %s exceeds length of page %s", pageOffset, fileLength));
+    }
+    if (pageOffset + bytesToRead > fileLength) {
+      bytesToRead = (int) (fileLength - (long) pageOffset);
+    }
 
-  /**
-   * @param path path of a file
-   * @return the corresponding page info for the file otherwise null
-   */
-  @Nullable
-  private PageInfo getPageInfo(Path path) {
-    PageId pageId = getPageId(path);
-    long pageSize;
-    if (pageId == null) {
-      LOG.error("Unrecognized page file" + path);
-      return null;
-    }
-    try {
-      pageSize = Files.size(path);
-    } catch (IOException e) {
-      LOG.error("Failed to get file size for " + path, e);
-      return null;
-    }
-    return new PageInfo(pageId, pageSize);
+    DataFileChannel dataFileChannel = new DataFileChannel(pageFile, pageOffset, bytesToRead);
+    return dataFileChannel;
   }
 
   @Override
   public void close() {
     // no-op
-  }
-
-  @Override
-  public Stream<PageInfo> getPages() throws IOException {
-    Path rootDir = Paths.get(mRoot);
-    return Files.walk(rootDir).filter(Files::isRegularFile).map(this::getPageInfo);
-  }
-
-  @Override
-  public long getCacheSize() {
-    return mCapacity;
   }
 }

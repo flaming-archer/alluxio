@@ -58,11 +58,15 @@ public class CollectLogCommand  extends AbstractCollectInfoCommand {
       "worker.out",
       "job_worker.log",
       "job_worker.out",
+      "fuse.log",
+      "fuse.out",
       "proxy.log",
       "proxy.out",
       "task.log",
       "task.out",
-      "user"
+      "user",
+      "alluxio-master",
+      "alluxio-worker"
   ).collect(Collectors.toSet());
   // We tolerate the beginning of a log file to contain some rows that are not timestamped.
   // A YARN application log can have >20 rows in the beginning for
@@ -164,7 +168,7 @@ public class CollectLogCommand  extends AbstractCollectInfoCommand {
    * */
   public CollectLogCommand(FileSystemContext fsContext) {
     super(fsContext);
-    mLogDirPath = fsContext.getClusterConf().get(PropertyKey.LOGS_DIR);
+    mLogDirPath = fsContext.getClusterConf().getString(PropertyKey.LOGS_DIR);
     mLogDir = new File(mLogDirPath);
     mLogDirUri = mLogDir.toURI();
   }

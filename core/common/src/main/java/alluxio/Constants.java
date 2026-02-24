@@ -11,6 +11,7 @@
 
 package alluxio;
 
+import java.util.regex.Pattern;
 import javax.annotation.concurrent.ThreadSafe;
 
 /**
@@ -73,13 +74,13 @@ public final class Constants {
   public static final String HEADER_HTTPS = "https://";
   public static final String HEADER_KODO = "kodo://";
   public static final String HEADER_OSS = "oss://";
-  public static final String HEADER_OZONE = "o3fs://";
   public static final String HEADER_S3 = "s3://";
   public static final String HEADER_S3A = "s3a://";
   public static final String HEADER_SWIFT = "swift://";
   public static final String HEADER_WASB = "wasb://";
   public static final String HEADER_WASBS = "wasbs://";
   public static final String HEADER_OBS = "obs://";
+  public static final String HEADER_TOS = "tos://";
 
   public static final int MAX_PORT = 65535;
 
@@ -92,9 +93,12 @@ public final class Constants {
   public static final long FILE_SYSTEM_MASTER_WORKER_SERVICE_VERSION = 2;
   public static final long BLOCK_MASTER_CLIENT_SERVICE_VERSION = 2;
   public static final long BLOCK_MASTER_WORKER_SERVICE_VERSION = 2;
+  public static final long BLOCK_WORKER_CLIENT_SERVICE_VERSION = 1;
   public static final long META_MASTER_CONFIG_SERVICE_VERSION = 2;
   public static final long META_MASTER_CLIENT_SERVICE_VERSION = 2;
   public static final long META_MASTER_MASTER_SERVICE_VERSION = 1;
+  public static final long META_MASTER_PROXY_SERVICE_VERSION = 1;
+  public static final long JOB_MASTER_MASTER_SERVICE_VERSION = 1;
   public static final long METRICS_MASTER_CLIENT_SERVICE_VERSION = 2;
   public static final long JOURNAL_MASTER_CLIENT_SERVICE_VERSION = 1;
   public static final long RAFT_JOURNAL_SERVICE_VERSION = 1;
@@ -104,6 +108,7 @@ public final class Constants {
   public static final String FILE_SYSTEM_MASTER_NAME = "FileSystemMaster";
   public static final String META_MASTER_NAME = "MetaMaster";
   public static final String METRICS_MASTER_NAME = "MetricsMaster";
+  public static final String JOURNAL_MASTER_NAME = "JournalMaster";
   public static final String BLOCK_WORKER_NAME = "BlockWorker";
   public static final String FILE_SYSTEM_WORKER_NAME = "FileSystemWorker";
 
@@ -116,11 +121,13 @@ public final class Constants {
   // Its value is "MetaMaster" for backwards compatibility so 1.7 clients can talk to 1.8 MetaMaster
   public static final String META_MASTER_CONFIG_SERVICE_NAME = "MetaMaster";
   public static final String META_MASTER_CLIENT_SERVICE_NAME = "MetaMaster";
+  public static final String META_MASTER_PROXY_SERVICE_NAME = "MetaMasterProxy";
   public static final String META_MASTER_MASTER_SERVICE_NAME = "MetaMasterMaster";
+  public static final String JOB_MASTER_MASTER_SERVICE_NAME = "JobMasterMaster";
   public static final String METRICS_MASTER_CLIENT_SERVICE_NAME = "MetricsMasterClient";
   public static final String BLOCK_WORKER_CLIENT_SERVICE_NAME = "BlockWorkerClient";
   public static final String FILE_SYSTEM_WORKER_CLIENT_SERVICE_NAME = "FileSystemWorkerClient";
-  public static final String JOURNAL_MASTER_CLIENT_SERVICE_NAME = "JournalMaster";
+  public static final String JOURNAL_MASTER_CLIENT_SERVICE_NAME = "JournalMasterClient";
   public static final String RAFT_JOURNAL_SERVICE_NAME = "RaftJournal";
 
   public static final String UFS_INPUT_STREAM_CACHE_EXPIRATION = "UfsInputStreamCacheExpiration";
@@ -177,7 +184,6 @@ public final class Constants {
   // S3 northbound API constants
   public static final String S3_DELETE_IN_ALLUXIO_ONLY = "ALLUXIO_ONLY";
   public static final String S3_DELETE_IN_ALLUXIO_AND_UFS = "ALLUXIO_AND_UFS";
-  public static final String S3_MULTIPART_TEMPORARY_DIR_SUFFIX = "_s3_multipart_tmp";
 
   // Ufs fingerprint
   public static final String INVALID_UFS_FINGERPRINT = "";
@@ -192,6 +198,9 @@ public final class Constants {
   public static final String JOB_MASTER_CLIENT_SERVICE_NAME = "JobMasterClient";
   public static final int JOB_MASTER_CLIENT_SERVICE_VERSION = 1;
   public static final String JOB_WORKER_NAME = "JobWorker";
+
+  // Throttle master
+  public static final String THROTTLE_MASTER_NAME = "ThrottleMaster";
 
   public static final int JOB_DEFAULT_MASTER_PORT = 20001;
   public static final int JOB_DEFAULT_MASTER_WEB_PORT = JOB_DEFAULT_MASTER_PORT + 1;
@@ -224,6 +233,14 @@ public final class Constants {
   public static final String MEDIUM_MEM = "MEM";
   public static final String MEDIUM_HDD = "HDD";
   public static final String MEDIUM_SSD = "SSD";
+
+  // Log file pattern
+  public static final Pattern LOG_FILE_PATTERN =
+      Pattern.compile(".*(\\.log|\\.out)(\\.[0-9-]+)?$|.*.txt|.*.json");
+
+  /* xAttr keys */
+  public static final String ETAG_XATTR_KEY = "s3_etag";
+  public static final String CRC64_KEY = "crc64";
 
   private Constants() {} // prevent instantiation
 }

@@ -16,8 +16,10 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 import alluxio.Constants;
-import alluxio.MasterStorageTierAssoc;
+import alluxio.DefaultStorageTierAssoc;
 import alluxio.StorageTierAssoc;
+import alluxio.client.block.options.GetWorkerReportOptions;
+import alluxio.master.WorkerState;
 import alluxio.wire.WorkerInfo;
 import alluxio.wire.WorkerNetAddress;
 
@@ -39,8 +41,8 @@ import java.util.Set;
 public final class MasterWorkerInfoTest {
   private static final List<String> STORAGE_TIER_ALIASES =
       Lists.newArrayList(Constants.MEDIUM_MEM, Constants.MEDIUM_SSD);
-  private static final StorageTierAssoc GLOBAL_STORAGE_TIER_ASSOC = new MasterStorageTierAssoc(
-      STORAGE_TIER_ALIASES);
+  private static final StorageTierAssoc GLOBAL_STORAGE_TIER_ASSOC =
+      new DefaultStorageTierAssoc(STORAGE_TIER_ALIASES);
   private static final Map<String, Long> TOTAL_BYTES_ON_TIERS =
       ImmutableMap.of(Constants.MEDIUM_MEM, Constants.KB * 3L,
           Constants.MEDIUM_SSD, Constants.KB * 3L);
@@ -137,13 +139,15 @@ public final class MasterWorkerInfoTest {
    */
   @Test
   public void workerInfoGeneration() {
-    WorkerInfo workerInfo = mInfo.generateWorkerInfo(null, true);
+    WorkerInfo workerInfo = mInfo.generateWorkerInfo(GetWorkerReportOptions.WorkerInfoField.ALL,
+        WorkerState.LIVE);
     assertEquals(mInfo.getId(), workerInfo.getId());
     assertEquals(mInfo.getWorkerAddress(), workerInfo.getAddress());
-    assertEquals("In Service", workerInfo.getState());
+    assertEquals(WorkerState.LIVE.toString(), workerInfo.getState());
     assertEquals(mInfo.getCapacityBytes(), workerInfo.getCapacityBytes());
     assertEquals(mInfo.getUsedBytes(), workerInfo.getUsedBytes());
     assertEquals(mInfo.getStartTime(), workerInfo.getStartTimeMs());
+    assertEquals(mInfo.getBlockCount(), workerInfo.getBlockCount());
   }
 
   /**

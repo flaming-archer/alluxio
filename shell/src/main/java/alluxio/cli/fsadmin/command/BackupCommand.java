@@ -49,7 +49,15 @@ public class BackupCommand extends AbstractFsAdminCommand {
           .required(false)
           .hasArg(false)
           .desc("whether to allow leader to take the backup when"
-              + " HA cluster has no standby master.")
+              + " backup delegation is enabled and HA cluster has no standby master.")
+          .build();
+  private static final Option BYPASS_DELEGATION_OPTION =
+      Option.builder()
+          .longOpt("bypass-delegation")
+          .required(false)
+          .hasArg(false)
+          .desc("when specified, the leading master will by-pass backup delegation,"
+              + " if it was enabled by configuration.")
           .build();
 
   /**
@@ -69,7 +77,8 @@ public class BackupCommand extends AbstractFsAdminCommand {
   public Options getOptions() {
     return new Options()
         .addOption(LOCAL_OPTION)
-        .addOption(ALLOW_LEADER_OPTION);
+        .addOption(ALLOW_LEADER_OPTION)
+        .addOption(BYPASS_DELEGATION_OPTION);
   }
 
   @Override
@@ -83,7 +92,8 @@ public class BackupCommand extends AbstractFsAdminCommand {
         BackupPOptions.newBuilder()
             .setRunAsync(true)
             .setLocalFileSystem(cl.hasOption(LOCAL_OPTION.getLongOpt()))
-            .setAllowLeader(cl.hasOption(ALLOW_LEADER_OPTION.getLongOpt())));
+            .setAllowLeader(cl.hasOption(ALLOW_LEADER_OPTION.getLongOpt()))
+            .setBypassDelegation(cl.hasOption(BYPASS_DELEGATION_OPTION.getLongOpt())));
     // Take backup in async mode.
     BackupStatus status = mMetaClient.backup(opts.build());
     UUID backupId = status.getBackupId();
@@ -137,7 +147,7 @@ public class BackupCommand extends AbstractFsAdminCommand {
 
   @Override
   public String getUsage() {
-    return "backup [directory] [--local] [--allow-leader]";
+    return "backup [directory] [--local] [--allow-leader] [--bypass-delegation]";
   }
 
   @Override
@@ -148,7 +158,8 @@ public class BackupCommand extends AbstractFsAdminCommand {
         + " master, use --local and specify a filesystem path. Backing up metadata"
         + " will be delegated to standby masters in HA cluster. Use --allow-leader for"
         + " leader to take the backup when there are no standby masters.(This will pause"
-        + " metadata changes during the backup.";
+        + " metadata changes during the backup). Use --bypass-delegation to take the backup on"
+        + " the leader even if there are standby masters.";
   }
 
   @Override

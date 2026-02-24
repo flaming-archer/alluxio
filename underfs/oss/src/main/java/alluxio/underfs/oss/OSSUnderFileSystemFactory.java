@@ -33,7 +33,8 @@ public class OSSUnderFileSystemFactory implements UnderFileSystemFactory {
   /**
    * Constructs a new {@link OSSUnderFileSystemFactory}.
    */
-  public OSSUnderFileSystemFactory() {}
+  public OSSUnderFileSystemFactory() {
+  }
 
   @Override
   public UnderFileSystem create(String path, UnderFileSystemConfiguration conf) {
@@ -58,10 +59,13 @@ public class OSSUnderFileSystemFactory implements UnderFileSystemFactory {
 
   /**
    * @param conf optional configuration object for the UFS
-   *
    * @return true if both access, secret and endpoint keys are present, false otherwise
    */
   private boolean checkOSSCredentials(UnderFileSystemConfiguration conf) {
+    if (conf.getBoolean(PropertyKey.UNDERFS_OSS_STS_ENABLED)) {
+      return conf.isSet(PropertyKey.UNDERFS_OSS_ECS_RAM_ROLE);
+    }
+
     return conf.isSet(PropertyKey.OSS_ACCESS_KEY)
         && conf.isSet(PropertyKey.OSS_SECRET_KEY)
         && conf.isSet(PropertyKey.OSS_ENDPOINT_KEY);

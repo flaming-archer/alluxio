@@ -12,11 +12,15 @@
 package alluxio.client.job;
 
 import alluxio.Client;
+import alluxio.grpc.JobMasterStatus;
 import alluxio.grpc.ListAllPOptions;
+import alluxio.job.CmdConfig;
 import alluxio.job.JobConfig;
+import alluxio.job.wire.CmdStatusBlock;
 import alluxio.job.wire.JobInfo;
 import alluxio.job.wire.JobServiceSummary;
 import alluxio.job.wire.JobWorkerHealth;
+import alluxio.job.wire.Status;
 import alluxio.worker.job.JobMasterClientContext;
 
 import java.io.IOException;
@@ -100,6 +104,37 @@ public interface JobMasterClient extends Client {
    * @return the plan id
    */
   long run(JobConfig jobConfig) throws IOException;
+
+  /**
+   * Submit a Cmd Job based on the given configuration.
+   * @param cmdConfig the Cmd job config
+   * @return the jobControlId
+   * @throws IOException
+   */
+  long submit(CmdConfig cmdConfig) throws IOException;
+
+  /**
+   * Gets the status of all job masters in the cluster.
+   *
+   * @return a list of status
+   */
+  List<JobMasterStatus> getAllMasterStatus() throws IOException;
+
+  /**
+   * Gets the status of the given command jobControlId.
+   *
+   * @param id the jobControl id
+   * @return the command status
+   */
+  Status getCmdStatus(long id) throws IOException;
+
+  /**
+   * Gets the detailed status of the given command jobControlId.
+   *
+   * @param id the jobControl id
+   * @return the detailed command status information
+   */
+  CmdStatusBlock getCmdStatusDetailed(long id) throws IOException;
 
   /**
    * Gets all worker health.

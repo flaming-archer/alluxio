@@ -15,7 +15,7 @@ import static org.junit.Assert.assertEquals;
 import static org.mockito.Mockito.when;
 
 import alluxio.Constants;
-import alluxio.MasterStorageTierAssoc;
+import alluxio.DefaultStorageTierAssoc;
 import alluxio.StorageTierAssoc;
 import alluxio.master.block.DefaultBlockMaster.Metrics;
 import alluxio.metrics.MetricInfo;
@@ -41,7 +41,7 @@ public final class BlockMasterMetricsTest {
   public void before() throws Exception {
     MetricsSystem.clearAllMetrics();
     mBlockMaster = Mockito.mock(DefaultBlockMaster.class);
-    StorageTierAssoc assoc = new MasterStorageTierAssoc(Lists.newArrayList(MEM, HDD));
+    StorageTierAssoc assoc = new DefaultStorageTierAssoc(Lists.newArrayList(MEM, HDD));
     when(mBlockMaster.getGlobalStorageTierAssoc()).thenReturn(assoc);
     Metrics.registerGauges(mBlockMaster);
   }
@@ -79,6 +79,7 @@ public final class BlockMasterMetricsTest {
     assertEquals(100L, getGauge(MetricKey.MASTER_UNIQUE_BLOCKS.getName()));
   }
 
+  @Test
   public void testMetricWorkers() {
     when(mBlockMaster.getWorkerCount()).thenReturn(200);
     assertEquals(200, getGauge(MetricKey.CLUSTER_WORKERS.getName()));

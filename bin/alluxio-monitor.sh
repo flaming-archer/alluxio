@@ -29,11 +29,10 @@ Where ACTION is one of:
   job_masters        \tStart monitors for all job_master nodes.
   job_worker         \tStart a job_worker monitor on this node.
   job_workers        \tStart monitors for all job_worker nodes.
-  hub_agent          \tStart the hub agent monitor on this node.
-  hub_manager        \tStart the hub manager monitor on this node.
   proxy              \tStart the proxy monitor on this node.
   proxies            \tStart monitors for all proxies nodes.
-
+"
+USAGE+="
 [host1,host2,...] is a comma separated list of host to monitor, if not given the default config for the target is used.
 
 -L  enables the log mode, this option disable the monitor checks and causes alluxio-monitor to only print the node log tail.
@@ -54,12 +53,13 @@ get_env() {
   CLASSPATH=${ALLUXIO_CLIENT_CLASSPATH}
   ALLUXIO_TASK_LOG="${ALLUXIO_LOGS_DIR}/task.log"
 
-  # Remove the remote debug configuration to avoid the error: "transport error 20: bind failed: Address already in use." 
+  # Remove the remote debug configuration to avoid the error: "transport error 20: bind failed: Address already in use."
   # See https://github.com/Alluxio/alluxio/issues/10958
-  ALLUXIO_MASTER_MONITOR_JAVA_OPTS=$(echo ${ALLUXIO_MASTER_JAVA_OPTS} | sed 's/^-agentlib:jdwp=transport=dt_socket.*address=[0-9]*//')
-  ALLUXIO_WORKER_MONITOR_JAVA_OPTS=$(echo ${ALLUXIO_WORKER_JAVA_OPTS} | sed 's/^-agentlib:jdwp=transport=dt_socket.*address=[0-9]*//')
-  ALLUXIO_JOB_MASTER_MONITOR_JAVA_OPTS=$(echo ${ALLUXIO_JOB_MASTER_JAVA_OPTS} | sed 's/^-agentlib:jdwp=transport=dt_socket.*address=[0-9]*//')
-  ALLUXIO_JOB_WORKER_MONITOR_JAVA_OPTS=$(echo ${ALLUXIO_JOB_WORKER_JAVA_OPTS} | sed 's/^-agentlib:jdwp=transport=dt_socket.*address=[0-9]*//')
+  # See https://github.com/Alluxio/alluxio/issues/15168
+  ALLUXIO_MASTER_MONITOR_JAVA_OPTS=$(echo ${ALLUXIO_MASTER_JAVA_OPTS} | sed 's/^-agentlib:jdwp=transport=dt_socket.*address=[0-9]*//' | sed 's/-Dcom.sun.management.jmxremote.port=[0-9]*//')
+  ALLUXIO_WORKER_MONITOR_JAVA_OPTS=$(echo ${ALLUXIO_WORKER_JAVA_OPTS} | sed 's/^-agentlib:jdwp=transport=dt_socket.*address=[0-9]*//' | sed 's/-Dcom.sun.management.jmxremote.port=[0-9]*//')
+  ALLUXIO_JOB_MASTER_MONITOR_JAVA_OPTS=$(echo ${ALLUXIO_JOB_MASTER_JAVA_OPTS} | sed 's/^-agentlib:jdwp=transport=dt_socket.*address=[0-9]*//' | sed 's/-Dcom.sun.management.jmxremote.port=[0-9]*//')
+  ALLUXIO_JOB_WORKER_MONITOR_JAVA_OPTS=$(echo ${ALLUXIO_JOB_WORKER_JAVA_OPTS} | sed 's/^-agentlib:jdwp=transport=dt_socket.*address=[0-9]*//'| sed 's/-Dcom.sun.management.jmxremote.port=[0-9]*//')
 }
 
 prepare_monitor() {
@@ -110,14 +110,6 @@ run_monitor() {
       monitor_exec=alluxio.worker.job.AlluxioJobWorkerMonitor
       alluxio_config="${alluxio_config} ${ALLUXIO_JOB_WORKER_MONITOR_JAVA_OPTS}"
       ;;
-    hub_agent)
-      CLASSPATH="${ALLUXIO_SERVER_CLASSPATH}"
-      monitor_exec=alluxio.hub.agent.process.AgentProcessMonitor
-      ;;
-    hub_manager)
-      CLASSPATH="${ALLUXIO_SERVER_CLASSPATH}"
-      monitor_exec=alluxio.hub.manager.process.ManagerProcessMonitor
-      ;;
     proxy)
       monitor_exec=alluxio.proxy.AlluxioProxyMonitor
       ;;
@@ -133,7 +125,7 @@ run_monitor() {
   else
     "${JAVA}" -cp ${CLASSPATH} ${alluxio_config} ${monitor_exec}
     if [[ $? -ne 0 ]]; then
-      echo -e "${WHITE}---${NC} ${RED}[ FAILED ]${NC} The ${CYAN}${node_type}${NC} @ ${PURPLE}$(hostname -f)${NC} is not serving requests.${NC}"
+      echo -e "${WHITE}---${NC} ${RED}[ FAILED ]${NC} The ${CYAN}${node_type}${NC} @ ${PURPLE}$(hostname -f)${NC} is not serving requests after 120s. Please check if the process is running and the logs/ if necessary.${NC}"
       print_node_logs "${node_type}"
       return 1
     fi
@@ -200,7 +192,8 @@ run_monitors() {
       # if there is an error, print the log tail for the remaining master nodes.
       batch_run_on_nodes "$(echo ${nodes})" "${BIN}/alluxio-monitor.sh" -L "${node_type}"
     else
-      HA_ENABLED=$(${BIN}/alluxio getConf ${ALLUXIO_MASTER_JAVA_OPTS} alluxio.zookeeper.enabled)
+      HA_ENABLED_GETCONF_RES=$(${BIN}/alluxio getConf ${ALLUXIO_MASTER_JAVA_OPTS} alluxio.zookeeper.enabled)
+      HA_ENABLED=$(check_true "$HA_ENABLED_GETCONF_RES")
       JOURNAL_TYPE=$(${BIN}/alluxio getConf ${ALLUXIO_MASTER_JAVA_OPTS} alluxio.master.journal.type | awk '{print toupper($0)}')
       if [[ ${JOURNAL_TYPE} == "EMBEDDED" ]]; then
         HA_ENABLED="true"
@@ -212,6 +205,16 @@ run_monitors() {
   else
     batch_run_on_nodes "$(echo ${nodes})" "${BIN}/alluxio-monitor.sh" "${mode}" "${node_type}"
   fi
+}
+
+check_true() {
+    local output=$1
+    if [[ $output == *"true"* ]]; then
+        result="true"
+    else
+        result="false"
+    fi
+    echo $result
 }
 
 # Used to run a command on multiple hosts concurrently.
@@ -312,14 +315,6 @@ main() {
     job_workers)
       prepare_monitor "Starting to monitor all Alluxio ${CYAN}job workers${NC}."
       run_monitors "job_worker" "${HOSTS}"
-      ;;
-    hub_agent)
-      CLASSPATH="${ALLUXIO_SERVER_CLASSPATH}"
-      monitor_exec=alluxio.hub.agent.process.AgentProcessMonitor
-      ;;
-    hub_manager)
-      CLASSPATH="${ALLUXIO_SERVER_CLASSPATH}"
-      monitor_exec=alluxio.hub.manager.process.ManagerProcessMonitor
       ;;
     proxy)
       run_monitor "proxy" "${MODE}"

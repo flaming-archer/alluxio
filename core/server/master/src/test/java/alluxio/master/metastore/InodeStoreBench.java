@@ -12,8 +12,8 @@
 package alluxio.master.metastore;
 
 import alluxio.Constants;
+import alluxio.conf.Configuration;
 import alluxio.conf.PropertyKey;
-import alluxio.conf.ServerConfiguration;
 import alluxio.master.file.contexts.CreateDirectoryContext;
 import alluxio.master.file.meta.MutableInodeDirectory;
 import alluxio.master.journal.checkpoint.CheckpointInputStream;
@@ -53,10 +53,12 @@ public class InodeStoreBench {
   public static void main(String[] args) throws Exception {
     // Enable logging to stdout.
     Layout layout = new PatternLayout("%d [%t] %-5p %c %x - %m%n");
-    Logger.getRootLogger().addAppender(new ConsoleAppender(layout));
+    ConsoleAppender consoleAppender = new ConsoleAppender();
+    consoleAppender.setLayout(layout);
+    Logger.getRootLogger().addAppender(consoleAppender);
 
     System.out.printf("Running benchmarks for rocks inode store%n");
-    sStore = new RocksInodeStore(ServerConfiguration.get(PropertyKey.MASTER_METASTORE_DIR));
+    sStore = new RocksInodeStore(Configuration.getString(PropertyKey.MASTER_METASTORE_DIR));
     runBenchmarks();
 
     System.out.printf("%nRunning benchmarks for heap inode store%n");

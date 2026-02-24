@@ -11,6 +11,8 @@
 
 package alluxio.web;
 
+import alluxio.conf.Configuration;
+import alluxio.conf.PropertyKey;
 import alluxio.util.ThreadUtils;
 
 import org.slf4j.Logger;
@@ -38,6 +40,8 @@ public class StacksServlet extends HttpServlet {
         resp.getOutputStream(), false, "UTF-8")) {
       ThreadUtils.printThreadInfo(out, "");
     }
-    ThreadUtils.logThreadInfo(LOG, "jsp requested", 1);
+    if (Configuration.getBoolean(PropertyKey.WEB_THREAD_DUMP_TO_LOG)) {
+      ThreadUtils.logThreadInfo(LOG, "jsp requested", 1);
+    }
   }
 }

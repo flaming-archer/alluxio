@@ -20,8 +20,6 @@ import alluxio.util.URIUtils;
 import alluxio.util.io.PathUtils;
 
 import org.apache.commons.lang3.StringUtils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.util.Arrays;
@@ -52,8 +50,6 @@ import javax.annotation.concurrent.ThreadSafe;
 @ThreadSafe
 public final class AlluxioURI implements Comparable<AlluxioURI>, Serializable {
   private static final long serialVersionUID = -1207227692436086387L;
-
-  private static final Logger LOG = LoggerFactory.getLogger(AlluxioURI.class);
 
   public static final String SEPARATOR = "/";
   public static final String CUR_DIR = ".";
@@ -453,6 +449,18 @@ public final class AlluxioURI implements Comparable<AlluxioURI>, Serializable {
    * @return true the current alluxioURI is an ancestor of the AlluxioURI
    */
   public boolean isAncestorOf(AlluxioURI alluxioURI) throws InvalidPathException {
+    return isAncestorOf(alluxioURI, true);
+  }
+
+  /**
+   * Returns true if the current AlluxioURI is an ancestor of another AlluxioURI.
+   * otherwise, return false.
+   * @param alluxioURI potential children to check
+   * @param cleanPath if the paths should be cleaned
+   * @return true the current alluxioURI is an ancestor of the AlluxioURI
+   */
+  public boolean isAncestorOf(AlluxioURI alluxioURI, boolean cleanPath)
+      throws InvalidPathException {
     // To be an ancestor of another URI, authority and scheme must match
     if (!Objects.equals(getAuthority(), alluxioURI.getAuthority())) {
       return false;
@@ -462,7 +470,7 @@ public final class AlluxioURI implements Comparable<AlluxioURI>, Serializable {
     }
 
     return PathUtils.hasPrefix(PathUtils.normalizePath(alluxioURI.getPath(), SEPARATOR),
-        PathUtils.normalizePath(getPath(), SEPARATOR));
+        PathUtils.normalizePath(getPath(), SEPARATOR), cleanPath);
   }
 
   /**

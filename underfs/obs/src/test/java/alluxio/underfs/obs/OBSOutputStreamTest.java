@@ -11,14 +11,17 @@
 
 package alluxio.underfs.obs;
 
+import static org.mockito.ArgumentMatchers.any;
+
 import alluxio.conf.AlluxioConfiguration;
-import alluxio.conf.InstancedConfiguration;
+import alluxio.conf.Configuration;
 import alluxio.conf.PropertyKey;
-import alluxio.util.ConfigurationUtils;
 
 import com.obs.services.ObsClient;
 import com.obs.services.exception.ObsException;
 import com.obs.services.model.ObjectMetadata;
+import com.obs.services.model.PutObjectResult;
+import com.obs.services.model.StorageClassEnum;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -44,8 +47,7 @@ import java.security.DigestOutputStream;
  */
 @RunWith(PowerMockRunner.class)
 public class OBSOutputStreamTest {
-  private static AlluxioConfiguration sConf =
-      new InstancedConfiguration(ConfigurationUtils.defaults());
+  private static AlluxioConfiguration sConf = Configuration.global();
 
   private ObsClient mObsClient;
   private File mFile;
@@ -63,6 +65,8 @@ public class OBSOutputStreamTest {
   @Before
   public void before() throws Exception {
     mObsClient = Mockito.mock(ObsClient.class);
+    Mockito.when(mObsClient.putObject(any(), any(), any(InputStream.class), any())).thenReturn(
+        new PutObjectResult("bucket", "key", "etag", "version", StorageClassEnum.STANDARD, "url"));
     mFile = Mockito.mock(File.class);
     mLocalOutputStream = Mockito.mock(BufferedOutputStream.class);
   }
@@ -80,7 +84,7 @@ public class OBSOutputStreamTest {
     mThrown.expect(IOException.class);
     mThrown.expectMessage(errorMessage);
     new OBSOutputStream("testBucketName", "testKey", mObsClient,
-        sConf.getList(PropertyKey.TMP_DIRS, ",")).close();
+        sConf.getList(PropertyKey.TMP_DIRS)).close();
   }
 
   /**
@@ -90,11 +94,11 @@ public class OBSOutputStreamTest {
   @PrepareForTest(OBSOutputStream.class)
   public void testWrite1() throws Exception {
     PowerMockito.whenNew(BufferedOutputStream.class)
-        .withArguments(Mockito.any(DigestOutputStream.class)).thenReturn(mLocalOutputStream);
+        .withArguments(any(DigestOutputStream.class)).thenReturn(mLocalOutputStream);
     PowerMockito.whenNew(BufferedOutputStream.class)
-        .withArguments(Mockito.any(FileOutputStream.class)).thenReturn(mLocalOutputStream);
+        .withArguments(any(FileOutputStream.class)).thenReturn(mLocalOutputStream);
     OBSOutputStream stream = new OBSOutputStream("testBucketName", "testKey", mObsClient,
-        sConf.getList(PropertyKey.TMP_DIRS, ","));
+        sConf.getList(PropertyKey.TMP_DIRS));
     stream.write(1);
     stream.close();
     Mockito.verify(mLocalOutputStream).write(1);
@@ -108,11 +112,11 @@ public class OBSOutputStreamTest {
   @PrepareForTest(OBSOutputStream.class)
   public void testWrite2() throws Exception {
     PowerMockito.whenNew(BufferedOutputStream.class)
-        .withArguments(Mockito.any(DigestOutputStream.class)).thenReturn(mLocalOutputStream);
+        .withArguments(any(DigestOutputStream.class)).thenReturn(mLocalOutputStream);
     PowerMockito.whenNew(BufferedOutputStream.class)
-        .withArguments(Mockito.any(FileOutputStream.class)).thenReturn(mLocalOutputStream);
+        .withArguments(any(FileOutputStream.class)).thenReturn(mLocalOutputStream);
     OBSOutputStream stream = new OBSOutputStream("testBucketName", "testKey", mObsClient,
-        sConf.getList(PropertyKey.TMP_DIRS, ","));
+        sConf.getList(PropertyKey.TMP_DIRS));
     byte[] b = new byte[1];
     stream.write(b, 0, 1);
     stream.close();
@@ -126,11 +130,11 @@ public class OBSOutputStreamTest {
   @PrepareForTest(OBSOutputStream.class)
   public void testWrite3() throws Exception {
     PowerMockito.whenNew(BufferedOutputStream.class)
-        .withArguments(Mockito.any(DigestOutputStream.class)).thenReturn(mLocalOutputStream);
+        .withArguments(any(DigestOutputStream.class)).thenReturn(mLocalOutputStream);
     PowerMockito.whenNew(BufferedOutputStream.class)
-        .withArguments(Mockito.any(FileOutputStream.class)).thenReturn(mLocalOutputStream);
+        .withArguments(any(FileOutputStream.class)).thenReturn(mLocalOutputStream);
     OBSOutputStream stream = new OBSOutputStream("testBucketName", "testKey", mObsClient,
-        sConf.getList(PropertyKey.TMP_DIRS, ","));
+        sConf.getList(PropertyKey.TMP_DIRS));
     byte[] b = new byte[1];
     stream.write(b);
     stream.close();
@@ -148,13 +152,13 @@ public class OBSOutputStreamTest {
     String errorMessage = "Invoke the createEmptyObject method error.";
     BufferedInputStream inputStream = PowerMockito.mock(BufferedInputStream.class);
     PowerMockito.whenNew(BufferedInputStream.class)
-        .withArguments(Mockito.any(FileInputStream.class)).thenReturn(inputStream);
+        .withArguments(any(FileInputStream.class)).thenReturn(inputStream);
     PowerMockito
         .when(mObsClient.putObject(Mockito.anyString(), Mockito.anyString(),
-            Mockito.any(InputStream.class), Mockito.any(ObjectMetadata.class)))
+            any(InputStream.class), any(ObjectMetadata.class)))
         .thenThrow(new ObsException(errorMessage));
     OBSOutputStream stream = new OBSOutputStream("testBucketName", "testKey", mObsClient,
-        sConf.getList(PropertyKey.TMP_DIRS, ","));
+        sConf.getList(PropertyKey.TMP_DIRS));
     mThrown.expect(IOException.class);
     mThrown.expectMessage(errorMessage);
     stream.close();
@@ -173,7 +177,7 @@ public class OBSOutputStreamTest {
     PowerMockito.whenNew(FileInputStream.class).withArguments(mFile).thenReturn(inputStream);
 
     OBSOutputStream stream = new OBSOutputStream("testBucketName", "testKey", mObsClient,
-        sConf.getList(PropertyKey.TMP_DIRS, ","));
+        sConf.getList(PropertyKey.TMP_DIRS));
     stream.close();
     Mockito.verify(mFile).delete();
   }
@@ -185,9 +189,9 @@ public class OBSOutputStreamTest {
   @PrepareForTest(OBSOutputStream.class)
   public void testFlush() throws Exception {
     PowerMockito.whenNew(BufferedOutputStream.class)
-        .withArguments(Mockito.any(DigestOutputStream.class)).thenReturn(mLocalOutputStream);
+        .withArguments(any(DigestOutputStream.class)).thenReturn(mLocalOutputStream);
     OBSOutputStream stream = new OBSOutputStream("testBucketName", "testKey", mObsClient,
-        sConf.getList(PropertyKey.TMP_DIRS, ","));
+        sConf.getList(PropertyKey.TMP_DIRS));
     stream.flush();
     stream.close();
     Mockito.verify(mLocalOutputStream).flush();

@@ -21,11 +21,11 @@ import javax.annotation.concurrent.NotThreadSafe;
  */
 @NotThreadSafe
 public abstract class SleepingRetry implements RetryPolicy {
-  private final int mMaxRetries;
+  protected final int mMaxRetries;
   private int mAttemptCount = 0;
 
   protected SleepingRetry(int maxRetries) {
-    Preconditions.checkArgument(maxRetries > 0, "Max retries must be a positive number");
+    Preconditions.checkArgument(maxRetries >= 0, "Max retries must be a non-negative number");
     mMaxRetries = maxRetries;
   }
 

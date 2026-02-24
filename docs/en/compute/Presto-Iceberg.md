@@ -21,11 +21,6 @@ If not, please refer to the
 and configuration. Most of that guide apply for Iceberg workflows as well, and this document 
 covers the specific instructions for working with Iceberg tables.
 
-The [guide]({{ '/en/compute/Presto.html' | relativize_url }}) mentions two approaches that 
-Presto can access data through Alluxio: via the filesystem interface, and via the catalog service. 
-Alluxio has not added support for Iceberg in the catalog service yet, so for Iceberg tables Presto 
-needs to access them through Alluxio's filesystem interface.
-
 ## Prerequisites
 
 * All [prerequisites]({{ '/en/compute/Presto.html' | relativize_url }}#prerequisites) 
@@ -73,9 +68,9 @@ Launch the Presto CLI client with the following command:
 ./presto --server localhost:8080 --catalog iceberg --debug
 ```
 
-For more information on the client, please refer to this section on [querying tables using Presto]
-({{ '/en/compute/Presto.html' | relativize_url }}#query-tables-using-presto). Note that the 
-catalog is set to `iceberg` since we will be dealing with Iceberg tables.
+For more information on the client, please refer to this section on
+[querying tables using Presto]({{ '/en/compute/Presto.html' | relativize_url }}#query-tables-using-presto).
+Note that the catalog is set to `iceberg` since we will be dealing with Iceberg tables.
 
 Run the following statements from the client:
 

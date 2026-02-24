@@ -13,7 +13,7 @@ package alluxio.job.util;
 
 import alluxio.Constants;
 import alluxio.client.Cancelable;
-import alluxio.client.block.AlluxioBlockStore;
+import alluxio.client.block.BlockStoreClient;
 import alluxio.client.block.BlockWorkerInfo;
 import alluxio.client.block.policy.BlockLocationPolicy;
 import alluxio.client.block.policy.LocalFirstPolicy;
@@ -27,10 +27,7 @@ import alluxio.collections.IndexDefinition;
 import alluxio.collections.IndexedSet;
 import alluxio.collections.Pair;
 import alluxio.conf.AlluxioConfiguration;
-import alluxio.conf.AlluxioProperties;
-import alluxio.conf.InstancedConfiguration;
-import alluxio.conf.PropertyKey;
-import alluxio.conf.ServerConfiguration;
+import alluxio.conf.Configuration;
 import alluxio.exception.AlluxioException;
 import alluxio.exception.ExceptionMessage;
 import alluxio.exception.status.NotFoundException;
@@ -54,6 +51,7 @@ import com.google.common.io.ByteStreams;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.text.MessageFormat;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -65,14 +63,9 @@ import java.util.stream.Collectors;
  */
 public final class JobUtils {
   // a read buffer that should be ignored
-  private static byte[] sIgnoredReadBuf = new byte[8 * Constants.MB];
+  private static final byte[] READ_BUF = new byte[8 * Constants.MB];
   private static final IndexDefinition<BlockWorkerInfo, WorkerNetAddress> WORKER_ADDRESS_INDEX =
-      new IndexDefinition<BlockWorkerInfo, WorkerNetAddress>(true) {
-        @Override
-        public WorkerNetAddress getFieldValue(BlockWorkerInfo o) {
-          return o.getNetAddress();
-        }
-      };
+      IndexDefinition.ofUnique(BlockWorkerInfo::getNetAddress);
 
   /**
    * Returns whichever specified worker stores the most blocks from the block info list.
@@ -123,7 +116,7 @@ public final class JobUtils {
   public static void loadBlock(URIStatus status, FileSystemContext context, long blockId,
       WorkerNetAddress address, boolean directCache)
       throws AlluxioException, IOException {
-    AlluxioConfiguration conf = ServerConfiguration.global();
+    AlluxioConfiguration conf = Configuration.global();
     // Explicitly specified a worker to load
     WorkerNetAddress localNetAddress = address;
     String localHostName = NetworkAddressUtils.getConnectHost(ServiceType.WORKER_RPC, conf);
@@ -143,13 +136,13 @@ public final class JobUtils {
     Set<String> pinnedLocation = status.getPinnedMediumTypes();
     if (pinnedLocation.size() > 1) {
       throw new AlluxioException(
-          ExceptionMessage.PINNED_TO_MULTIPLE_MEDIUMTYPES.getMessage(status.getPath()));
+          MessageFormat.format("File {0} pinned to multiple medium types", status.getPath()));
     }
 
     // when the data to load is persisted, simply use local worker to load
     // from ufs (e.g. distributed load) or from a remote worker (e.g. setReplication)
     // Only use this read local first method to load if nearest worker is clear
-    if (netAddress.size() <= 1 && pinnedLocation.isEmpty() && status.isPersisted()) {
+    if (netAddress.size() <= 1 && !status.getFileInfo().isPinned() && status.isPersisted()) {
       if (directCache) {
         loadThroughCacheRequest(status, context, blockId, conf, localNetAddress);
       } else {
@@ -165,21 +158,21 @@ public final class JobUtils {
     OpenFilePOptions openOptions =
         OpenFilePOptions.newBuilder().setReadType(ReadPType.NO_CACHE).build();
 
-    InStreamOptions inOptions = new InStreamOptions(status, openOptions, conf);
+    InStreamOptions inOptions = new InStreamOptions(status, openOptions, conf, context);
     // Set read location policy always to local first for loading blocks for job tasks
     inOptions.setUfsReadLocationPolicy(BlockLocationPolicy.Factory.create(
-        LocalFirstPolicy.class.getCanonicalName(), conf));
+        LocalFirstPolicy.class, conf));
 
-    OutStreamOptions outOptions = OutStreamOptions.defaults(context.getClientContext());
+    OutStreamOptions outOptions = OutStreamOptions.defaults(context);
     outOptions.setMediumType(medium);
     // Set write location policy always to local first for loading blocks for job tasks
     outOptions.setLocationPolicy(BlockLocationPolicy.Factory.create(
-        LocalFirstPolicy.class.getCanonicalName(), conf));
+        LocalFirstPolicy.class, conf));
 
     BlockInfo blockInfo = status.getBlockInfo(blockId);
     Preconditions.checkNotNull(blockInfo, "Can not find block %s in status %s", blockId, status);
     long blockSize = blockInfo.getLength();
-    AlluxioBlockStore blockStore = AlluxioBlockStore.create(context);
+    BlockStoreClient blockStore = BlockStoreClient.create(context);
     try (OutputStream outputStream =
         blockStore.getOutStream(blockId, blockSize, localNetAddress, outOptions)) {
       try (InputStream inputStream = blockStore.getInStream(blockId, inOptions)) {
@@ -198,12 +191,12 @@ public final class JobUtils {
   private static void loadThroughCacheRequest(URIStatus status, FileSystemContext context,
       long blockId, AlluxioConfiguration conf, WorkerNetAddress localNetAddress)
       throws IOException {
-    AlluxioBlockStore blockStore = AlluxioBlockStore.create(context);
+    BlockStoreClient blockStore = BlockStoreClient.create(context);
     OpenFilePOptions openOptions =
         OpenFilePOptions.newBuilder().setReadType(ReadPType.CACHE).build();
-    InStreamOptions inOptions = new InStreamOptions(status, openOptions, conf);
+    InStreamOptions inOptions = new InStreamOptions(status, openOptions, conf, context);
     BlockLocationPolicy policy =
-        BlockLocationPolicy.Factory.create(LocalFirstPolicy.class.getCanonicalName(), conf);
+        BlockLocationPolicy.Factory.create(LocalFirstPolicy.class, conf);
     inOptions.setUfsReadLocationPolicy(policy);
     Protocol.OpenUfsBlockOptions openUfsBlockOptions = inOptions.getOpenUfsBlockOptions(blockId);
     BlockInfo info = Preconditions.checkNotNull(status.getBlockInfo(blockId));
@@ -230,20 +223,15 @@ public final class JobUtils {
 
   private static void loadThroughRead(URIStatus status, FileSystemContext context, long blockId,
       AlluxioConfiguration conf) throws IOException {
-    // This does not work for remote worker unless we have passive cache on.
-    AlluxioProperties prop = context.getClusterConf().copyProperties();
-    prop.set(PropertyKey.USER_FILE_PASSIVE_CACHE_ENABLED, "true");
-    AlluxioConfiguration config = new InstancedConfiguration(prop);
-    FileSystemContext loadContext = FileSystemContext.create(config);
-    AlluxioBlockStore blockStore = AlluxioBlockStore.create(loadContext);
+    BlockStoreClient blockStore = BlockStoreClient.create(context);
     OpenFilePOptions openOptions =
         OpenFilePOptions.newBuilder().setReadType(ReadPType.CACHE).build();
-    InStreamOptions inOptions = new InStreamOptions(status, openOptions, conf);
+    InStreamOptions inOptions = new InStreamOptions(status, openOptions, conf, context);
     inOptions.setUfsReadLocationPolicy(BlockLocationPolicy.Factory.create(
-        LocalFirstPolicy.class.getCanonicalName(), conf));
+        LocalFirstPolicy.class, conf));
     BlockInfo info = Preconditions.checkNotNull(status.getBlockInfo(blockId));
     try (InputStream inputStream = blockStore.getInStream(info, inOptions, ImmutableMap.of())) {
-      while (inputStream.read(sIgnoredReadBuf) != -1) {}
+      while (inputStream.read(READ_BUF) != -1) {}
     }
   }
 

@@ -16,12 +16,16 @@ import static java.util.stream.Collectors.toMap;
 
 import alluxio.AlluxioURI;
 import alluxio.Constants;
-import alluxio.client.block.AlluxioBlockStore;
+import alluxio.client.ReadType;
+import alluxio.client.WriteType;
+import alluxio.client.block.BlockStoreClient;
 import alluxio.client.block.BlockWorkerInfo;
 import alluxio.client.file.FileSystemContextReinitializer.ReinitBlockerResource;
 import alluxio.client.file.options.InStreamOptions;
 import alluxio.client.file.options.OutStreamOptions;
 import alluxio.conf.AlluxioConfiguration;
+import alluxio.conf.ConfigurationBuilder;
+import alluxio.conf.OverlayConfiguration;
 import alluxio.conf.PropertyKey;
 import alluxio.exception.AlluxioException;
 import alluxio.exception.DirectoryNotEmptyException;
@@ -38,6 +42,7 @@ import alluxio.exception.status.NotFoundException;
 import alluxio.exception.status.UnauthenticatedException;
 import alluxio.exception.status.UnavailableException;
 import alluxio.grpc.Bits;
+import alluxio.grpc.CancelSyncMetadataPResponse;
 import alluxio.grpc.CheckAccessPOptions;
 import alluxio.grpc.CreateDirectoryPOptions;
 import alluxio.grpc.CreateFilePOptions;
@@ -45,8 +50,10 @@ import alluxio.grpc.DeletePOptions;
 import alluxio.grpc.ExistsPOptions;
 import alluxio.grpc.FreePOptions;
 import alluxio.grpc.GetStatusPOptions;
-import alluxio.grpc.GrpcUtils;
+import alluxio.grpc.GetSyncProgressPResponse;
+import alluxio.grpc.JobProgressReportFormat;
 import alluxio.grpc.ListStatusPOptions;
+import alluxio.grpc.ListStatusPartialPOptions;
 import alluxio.grpc.LoadMetadataPType;
 import alluxio.grpc.MountPOptions;
 import alluxio.grpc.OpenFilePOptions;
@@ -55,12 +62,17 @@ import alluxio.grpc.ScheduleAsyncPersistencePOptions;
 import alluxio.grpc.SetAclAction;
 import alluxio.grpc.SetAclPOptions;
 import alluxio.grpc.SetAttributePOptions;
+import alluxio.grpc.SyncMetadataAsyncPResponse;
+import alluxio.grpc.SyncMetadataPOptions;
+import alluxio.grpc.SyncMetadataPResponse;
 import alluxio.grpc.UnmountPOptions;
+import alluxio.job.JobDescription;
+import alluxio.job.JobRequest;
 import alluxio.master.MasterInquireClient;
 import alluxio.resource.CloseableResource;
 import alluxio.security.authorization.AclEntry;
 import alluxio.uri.Authority;
-import alluxio.util.FileSystemOptions;
+import alluxio.util.FileSystemOptionsUtils;
 import alluxio.wire.BlockLocation;
 import alluxio.wire.BlockLocationInfo;
 import alluxio.wire.FileBlockInfo;
@@ -80,7 +92,11 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import javax.annotation.concurrent.ThreadSafe;
 
 /**
@@ -90,13 +106,23 @@ import javax.annotation.concurrent.ThreadSafe;
 */
 @ThreadSafe
 public class BaseFileSystem implements FileSystem {
+  private static final AlluxioConfiguration DIRECT_ACCESS_CONF = new ConfigurationBuilder()
+      .setProperty(PropertyKey.USER_FILE_METADATA_SYNC_INTERVAL, "0")
+      .setProperty(PropertyKey.USER_FILE_READ_TYPE_DEFAULT, ReadType.NO_CACHE)
+      .setProperty(PropertyKey.USER_FILE_WRITE_TYPE_DEFAULT, WriteType.THROUGH).build();
   private static final Logger LOG = LoggerFactory.getLogger(BaseFileSystem.class);
+
   /** Used to manage closeable resources. */
   private final Closer mCloser = Closer.create();
   protected final FileSystemContext mFsContext;
-  protected final AlluxioBlockStore mBlockStore;
+  protected final BlockStoreClient mBlockStore;
+  protected AtomicReference<Matcher> mPathRegex = new AtomicReference<>();
 
   protected volatile boolean mClosed = false;
+
+  protected static final Error UNREACHABLE_CODE_ERROR = new Error("We should never reach here. "
+      + "wrapAndThrowAlluxioStatusException is guaranteed "
+      + "to throw an exception and never returns.");
 
   /**
    * Constructs a new base file system.
@@ -105,7 +131,7 @@ public class BaseFileSystem implements FileSystem {
    */
   public BaseFileSystem(FileSystemContext fsContext) {
     mFsContext = fsContext;
-    mBlockStore = AlluxioBlockStore.create(fsContext);
+    mBlockStore = BlockStoreClient.create(fsContext);
     mCloser.register(mFsContext);
   }
 
@@ -135,8 +161,8 @@ public class BaseFileSystem implements FileSystem {
       throws InvalidPathException, IOException, AlluxioException {
     checkUri(path);
     rpc(client -> {
-      CheckAccessPOptions mergedOptions = FileSystemOptions
-          .checkAccessDefaults(mFsContext.getPathConf(path))
+      CheckAccessPOptions mergedOptions = FileSystemOptionsUtils
+          .checkAccessDefaults(getDirectAccessConf(path))
           .toBuilder().mergeFrom(options).build();
       client.checkAccess(path, mergedOptions);
       LOG.debug("Checked access {}, options: {}", path.getPath(), mergedOptions);
@@ -144,13 +170,34 @@ public class BaseFileSystem implements FileSystem {
     });
   }
 
+  private boolean checkDirectAccess(AlluxioURI uri) {
+    if (!getConf().isSet(PropertyKey.USER_FILE_DIRECT_ACCESS)) {
+      return false;
+    }
+    if (mPathRegex.get() == null) {
+      mPathRegex.compareAndSet(null,
+          Pattern.compile(
+              getConf().getString(PropertyKey.USER_FILE_DIRECT_ACCESS)).matcher(""));
+    }
+    return mPathRegex.get().reset(uri.getPath()).matches();
+  }
+
+  private AlluxioConfiguration getDirectAccessConf(AlluxioURI uri) {
+    AlluxioConfiguration inner = mFsContext.getPathConf(uri);
+    if (checkDirectAccess(uri)) {
+      return new OverlayConfiguration(DIRECT_ACCESS_CONF, inner);
+    } else {
+      return inner;
+    }
+  }
+
   @Override
   public void createDirectory(AlluxioURI path, CreateDirectoryPOptions options)
       throws FileAlreadyExistsException, InvalidPathException, IOException, AlluxioException {
     checkUri(path);
     rpc(client -> {
-      CreateDirectoryPOptions mergedOptions = FileSystemOptions.createDirectoryDefaults(
-          mFsContext.getPathConf(path)).toBuilder().mergeFrom(options).build();
+      CreateDirectoryPOptions mergedOptions = FileSystemOptionsUtils.createDirectoryDefaults(
+          getDirectAccessConf(path)).toBuilder().mergeFrom(options).build();
       client.createDirectory(path, mergedOptions);
       LOG.debug("Created directory {}, options: {}", path.getPath(), mergedOptions);
       return null;
@@ -158,17 +205,17 @@ public class BaseFileSystem implements FileSystem {
   }
 
   @Override
-  public FileOutStream createFile(AlluxioURI path, CreateFilePOptions options)
+  public FileOutStream createFile(AlluxioURI path, final CreateFilePOptions options)
       throws FileAlreadyExistsException, InvalidPathException, IOException, AlluxioException {
     checkUri(path);
     return rpc(client -> {
-      CreateFilePOptions mergedOptions = FileSystemOptions.createFileDefaults(
-          mFsContext.getPathConf(path)).toBuilder().mergeFrom(options).build();
+      CreateFilePOptions mergedOptions = FileSystemOptionsUtils.createFileDefaults(
+          getDirectAccessConf(path)).toBuilder().mergeFrom(options).build();
       URIStatus status = client.createFile(path, mergedOptions);
       LOG.debug("Created file {}, options: {}", path.getPath(), mergedOptions);
       OutStreamOptions outStreamOptions =
-          new OutStreamOptions(mergedOptions, mFsContext.getClientContext(),
-              mFsContext.getPathConf(path));
+          new OutStreamOptions(mergedOptions, mFsContext,
+              getDirectAccessConf(path));
       outStreamOptions.setUfsPath(status.getUfsPath());
       outStreamOptions.setMountId(status.getMountId());
       outStreamOptions.setAcl(status.getAcl());
@@ -186,8 +233,8 @@ public class BaseFileSystem implements FileSystem {
       throws DirectoryNotEmptyException, FileDoesNotExistException, IOException, AlluxioException {
     checkUri(path);
     rpc(client -> {
-      DeletePOptions mergedOptions = FileSystemOptions.deleteDefaults(
-          mFsContext.getPathConf(path)).toBuilder().mergeFrom(options).build();
+      DeletePOptions mergedOptions = FileSystemOptionsUtils.deleteDefaults(
+          getDirectAccessConf(path)).toBuilder().mergeFrom(options).build();
       client.delete(path, mergedOptions);
       LOG.debug("Deleted {}, options: {}", path.getPath(), mergedOptions);
       return null;
@@ -198,17 +245,11 @@ public class BaseFileSystem implements FileSystem {
   public boolean exists(AlluxioURI path, final ExistsPOptions options)
       throws IOException, AlluxioException {
     checkUri(path);
-    try {
-      return rpc(client -> {
-        ExistsPOptions mergedOptions = FileSystemOptions.existsDefaults(
-            mFsContext.getPathConf(path)).toBuilder().mergeFrom(options).build();
-        // TODO(calvin): Make this more efficient
-        client.getStatus(path, GrpcUtils.toGetStatusOptions(mergedOptions));
-        return true;
-      });
-    } catch (FileDoesNotExistException | InvalidPathException e) {
-      return false;
-    }
+    return rpc(client -> {
+      ExistsPOptions mergedOptions = FileSystemOptionsUtils.existsDefaults(
+          getDirectAccessConf(path)).toBuilder().mergeFrom(options).build();
+      return client.exists(path, mergedOptions);
+    });
   }
 
   @Override
@@ -216,7 +257,7 @@ public class BaseFileSystem implements FileSystem {
       throws FileDoesNotExistException, IOException, AlluxioException {
     checkUri(path);
     rpc(client -> {
-      FreePOptions mergedOptions = FileSystemOptions.freeDefaults(mFsContext.getPathConf(path))
+      FreePOptions mergedOptions = FileSystemOptionsUtils.freeDefaults(getDirectAccessConf(path))
           .toBuilder().mergeFrom(options).build();
       client.free(path, mergedOptions);
       LOG.debug("Freed {}, options: {}", path.getPath(), mergedOptions);
@@ -225,11 +266,10 @@ public class BaseFileSystem implements FileSystem {
   }
 
   @Override
-  public List<BlockLocationInfo> getBlockLocations(AlluxioURI path)
+  public List<BlockLocationInfo> getBlockLocations(URIStatus status)
       throws IOException, AlluxioException {
     List<BlockLocationInfo> blockLocations = new ArrayList<>();
-    // Don't need to checkUri here because we call other client operations
-    List<FileBlockInfo> blocks = getStatus(path).getFileBlockInfos();
+    List<FileBlockInfo> blocks = status.getFileBlockInfos();
     for (FileBlockInfo fileBlockInfo : blocks) {
       // add the existing in-Alluxio block locations
       List<WorkerNetAddress> locations = fileBlockInfo.getBlockInfo().getLocations()
@@ -243,7 +283,7 @@ public class BaseFileSystem implements FileSystem {
               location -> finalWorkerHosts.get(HostAndPort.fromString(location).getHost()))
               .filter(Objects::nonNull).collect(toList());
         }
-        if (locations.isEmpty() && mFsContext.getPathConf(path)
+        if (locations.isEmpty() && mFsContext.getPathConf(new AlluxioURI(status.getPath()))
             .getBoolean(PropertyKey.USER_UFS_BLOCK_LOCATION_ALL_FALLBACK_ENABLED)) {
           // Case 2: Fallback to add all workers to locations so some apps (Impala) won't panic.
           locations.addAll(getHostWorkerMap().values());
@@ -272,12 +312,12 @@ public class BaseFileSystem implements FileSystem {
       throws FileDoesNotExistException, IOException, AlluxioException {
     checkUri(path);
     URIStatus status = rpc(client -> {
-      GetStatusPOptions mergedOptions = FileSystemOptions.getStatusDefaults(
-          mFsContext.getPathConf(path)).toBuilder().mergeFrom(options).build();
+      GetStatusPOptions mergedOptions = FileSystemOptionsUtils.getStatusDefaults(
+          getDirectAccessConf(path)).toBuilder().mergeFrom(options).build();
       return client.getStatus(path, mergedOptions);
     });
     if (!status.isCompleted()) {
-      LOG.warn("File {} is not yet completed. getStatus will see incomplete metadata.", path);
+      LOG.debug("File {} is not yet completed. getStatus will see incomplete metadata.", path);
     }
     return status;
   }
@@ -288,8 +328,8 @@ public class BaseFileSystem implements FileSystem {
     checkUri(path);
     return rpc(client -> {
       // TODO(calvin): Fix the exception handling in the master
-      ListStatusPOptions mergedOptions = FileSystemOptions.listStatusDefaults(
-          mFsContext.getPathConf(path)).toBuilder().mergeFrom(options).build();
+      ListStatusPOptions mergedOptions = FileSystemOptionsUtils.listStatusDefaults(
+          getDirectAccessConf(path)).toBuilder().mergeFrom(options).build();
       return client.listStatus(path, mergedOptions);
     });
   }
@@ -301,10 +341,22 @@ public class BaseFileSystem implements FileSystem {
     checkUri(path);
     rpc(client -> {
       // TODO(calvin): Fix the exception handling in the master
-      ListStatusPOptions mergedOptions = FileSystemOptions.listStatusDefaults(
-          mFsContext.getPathConf(path)).toBuilder().mergeFrom(options).build();
+      ListStatusPOptions mergedOptions = FileSystemOptionsUtils.listStatusDefaults(
+          getDirectAccessConf(path)).toBuilder().mergeFrom(options).build();
       client.iterateStatus(path, mergedOptions, action);
       return null;
+    });
+  }
+
+  @Override
+  public ListStatusPartialResult listStatusPartial(
+      AlluxioURI path, final ListStatusPartialPOptions options)
+      throws AlluxioException, IOException {
+    checkUri(path);
+    return rpc(client -> {
+      ListStatusPartialPOptions mergedOptions = FileSystemOptionsUtils.listStatusPartialDefaults(
+          getDirectAccessConf(path)).toBuilder().mergeFrom(options).build();
+      return client.listStatusPartial(path, mergedOptions);
     });
   }
 
@@ -313,8 +365,8 @@ public class BaseFileSystem implements FileSystem {
       throws FileDoesNotExistException, IOException, AlluxioException {
     checkUri(path);
     rpc(client -> {
-      ListStatusPOptions mergedOptions = FileSystemOptions.listStatusDefaults(
-          mFsContext.getPathConf(path)).toBuilder().mergeFrom(options)
+      ListStatusPOptions mergedOptions = FileSystemOptionsUtils.listStatusDefaults(
+          getDirectAccessConf(path)).toBuilder().mergeFrom(options)
           .setLoadMetadataType(LoadMetadataPType.ALWAYS).setLoadMetadataOnly(true).build();
       client.listStatus(path, mergedOptions);
       return null;
@@ -326,7 +378,7 @@ public class BaseFileSystem implements FileSystem {
       throws IOException, AlluxioException {
     checkUri(alluxioPath);
     rpc(client -> {
-      MountPOptions mergedOptions = FileSystemOptions.mountDefaults(
+      MountPOptions mergedOptions = FileSystemOptionsUtils.mountDefaults(
           mFsContext.getPathConf(alluxioPath)).toBuilder().mergeFrom(options).build();
       // TODO(calvin): Make this fail on the master side
       client.mount(alluxioPath, ufsPath, mergedOptions);
@@ -340,7 +392,7 @@ public class BaseFileSystem implements FileSystem {
       throws IOException, AlluxioException {
     checkUri(alluxioPath);
     rpc(client -> {
-      MountPOptions mergedOptions = FileSystemOptions.mountDefaults(
+      MountPOptions mergedOptions = FileSystemOptionsUtils.mountDefaults(
           mFsContext.getPathConf(alluxioPath)).toBuilder().mergeFrom(options).build();
       client.updateMount(alluxioPath, mergedOptions);
       LOG.debug("UpdateMount on {}", alluxioPath.getPath());
@@ -349,8 +401,9 @@ public class BaseFileSystem implements FileSystem {
   }
 
   @Override
-  public Map<String, MountPointInfo> getMountTable() throws IOException, AlluxioException {
-    return rpc(FileSystemMasterClient::getMountTable);
+  public Map<String, MountPointInfo> getMountTable(boolean checkUfs)
+      throws IOException, AlluxioException {
+    return rpc(client -> client.getMountTable(checkUfs));
   }
 
   @Override
@@ -364,7 +417,8 @@ public class BaseFileSystem implements FileSystem {
     checkUri(path);
     rpc(client -> {
       ScheduleAsyncPersistencePOptions mergedOptions =
-          FileSystemOptions.scheduleAsyncPersistDefaults(mFsContext.getPathConf(path)).toBuilder()
+          FileSystemOptionsUtils
+              .scheduleAsyncPersistDefaults(getDirectAccessConf(path)).toBuilder()
               .mergeFrom(options).build();
       client.scheduleAsyncPersist(path, mergedOptions);
       LOG.debug("Scheduled persist for {}, options: {}", path.getPath(), mergedOptions);
@@ -377,12 +431,12 @@ public class BaseFileSystem implements FileSystem {
       throws FileDoesNotExistException, OpenDirectoryException, FileIncompleteException,
       IOException, AlluxioException {
     checkUri(path);
-    AlluxioConfiguration conf = mFsContext.getPathConf(path);
-    URIStatus status = getStatus(path,
-        FileSystemOptions.getStatusDefaults(conf).toBuilder()
-            .setAccessMode(Bits.READ)
-            .setUpdateTimestamps(options.getUpdateLastAccessTime())
-            .build());
+    AlluxioConfiguration conf = getDirectAccessConf(path);
+    GetStatusPOptions opt = FileSystemOptionsUtils.getStatusDefaults(conf)
+        .toBuilder()
+        .setAccessMode(Bits.READ)
+        .setUpdateTimestamps(options.getUpdateLastAccessTime()).build();
+    URIStatus status = getStatus(path, opt);
     return openFile(status, options);
   }
 
@@ -397,10 +451,10 @@ public class BaseFileSystem implements FileSystem {
     if (!status.isCompleted()) {
       throw new FileIncompleteException(path);
     }
-    AlluxioConfiguration conf = mFsContext.getPathConf(path);
-    OpenFilePOptions mergedOptions = FileSystemOptions.openFileDefaults(conf)
+    AlluxioConfiguration conf = getDirectAccessConf(path);
+    OpenFilePOptions mergedOptions = FileSystemOptionsUtils.openFileDefaults(conf)
         .toBuilder().mergeFrom(options).build();
-    InStreamOptions inStreamOptions = new InStreamOptions(status, mergedOptions, conf);
+    InStreamOptions inStreamOptions = new InStreamOptions(status, mergedOptions, conf, mFsContext);
     return new AlluxioFileInStream(status, inStreamOptions, mFsContext);
   }
 
@@ -410,7 +464,8 @@ public class BaseFileSystem implements FileSystem {
     checkUri(src);
     checkUri(dst);
     rpc(client -> {
-      RenamePOptions mergedOptions = FileSystemOptions.renameDefaults(mFsContext.getPathConf(dst))
+      RenamePOptions mergedOptions = FileSystemOptionsUtils
+          .renameDefaults(mFsContext.getPathConf(dst))
           .toBuilder().mergeFrom(options).build();
       // TODO(calvin): Update this code on the master side.
       client.rename(src, dst, mergedOptions);
@@ -433,8 +488,8 @@ public class BaseFileSystem implements FileSystem {
       SetAclPOptions options) throws FileDoesNotExistException, IOException, AlluxioException {
     checkUri(path);
     rpc(client -> {
-      SetAclPOptions mergedOptions = FileSystemOptions.setAclDefaults(
-          mFsContext.getPathConf(path)).toBuilder().mergeFrom(options).build();
+      SetAclPOptions mergedOptions = FileSystemOptionsUtils.setAclDefaults(
+          getDirectAccessConf(path)).toBuilder().mergeFrom(options).build();
       client.setAcl(path, action, entries, mergedOptions);
       LOG.debug("Set ACL for {}, entries: {} options: {}", path.getPath(), entries,
           mergedOptions);
@@ -447,7 +502,7 @@ public class BaseFileSystem implements FileSystem {
       throws FileDoesNotExistException, IOException, AlluxioException {
     checkUri(path);
     SetAttributePOptions mergedOptions =
-        FileSystemOptions.setAttributeClientDefaults(mFsContext.getPathConf(path))
+        FileSystemOptionsUtils.setAttributeClientDefaults(getDirectAccessConf(path))
             .toBuilder().mergeFrom(options).build();
     rpc(client -> {
       client.setAttribute(path, mergedOptions);
@@ -490,12 +545,83 @@ public class BaseFileSystem implements FileSystem {
       throws IOException, AlluxioException {
     checkUri(path);
     rpc(client -> {
-      UnmountPOptions mergedOptions = FileSystemOptions.unmountDefaults(
-          mFsContext.getPathConf(path)).toBuilder().mergeFrom(options).build();
+      UnmountPOptions mergedOptions = FileSystemOptionsUtils.unmountDefaults(
+          getDirectAccessConf(path)).toBuilder().mergeFrom(options).build();
       client.unmount(path);
       LOG.debug("Unmounted {}, options: {}", path.getPath(), mergedOptions);
       return null;
     });
+  }
+
+  @Override
+  public void needsSync(AlluxioURI path)
+      throws IOException, AlluxioException {
+    checkUri(path);
+    rpc(client -> {
+      client.needsSync(path);
+      return null;
+    });
+  }
+
+  @Override
+  public Optional<String> submitJob(JobRequest jobRequest) {
+    try (CloseableResource<FileSystemMasterClient> client =
+            mFsContext.acquireMasterClientResource()) {
+      return client.get().submitJob(jobRequest);
+    }
+  }
+
+  @Override
+  public boolean stopJob(JobDescription jobDescription) {
+    try (CloseableResource<FileSystemMasterClient> client =
+            mFsContext.acquireMasterClientResource()) {
+      return client.get().stopJob(jobDescription);
+    }
+  }
+
+  @Override
+  public String getJobProgress(JobDescription jobDescription,
+      JobProgressReportFormat format, boolean verbose) {
+    try (CloseableResource<FileSystemMasterClient> client =
+            mFsContext.acquireMasterClientResource()) {
+      return client.get().getJobProgress(jobDescription, format, verbose);
+    }
+  }
+
+  @Override
+  public SyncMetadataPResponse syncMetadata(AlluxioURI path, SyncMetadataPOptions options)
+      throws FileDoesNotExistException, IOException, AlluxioException {
+    try (CloseableResource<FileSystemMasterClient> client =
+             mFsContext.acquireMasterClientResource()) {
+      return client.get().syncMetadata(path, options);
+    }
+  }
+
+  @Override
+  public SyncMetadataAsyncPResponse syncMetadataAsync(AlluxioURI path, SyncMetadataPOptions options)
+      throws FileDoesNotExistException, IOException, AlluxioException {
+    try (CloseableResource<FileSystemMasterClient> client =
+             mFsContext.acquireMasterClientResource()) {
+      return client.get().syncMetadataAsync(path, options);
+    }
+  }
+
+  @Override
+  public GetSyncProgressPResponse getSyncProgress(long taskGroupId)
+      throws FileDoesNotExistException, IOException, AlluxioException {
+    try (CloseableResource<FileSystemMasterClient> client =
+             mFsContext.acquireMasterClientResource()) {
+      return client.get().getSyncProgress(taskGroupId);
+    }
+  }
+
+  @Override
+  public CancelSyncMetadataPResponse cancelSyncMetadata(long taskGroupId)
+      throws IOException, AlluxioException {
+    try (CloseableResource<FileSystemMasterClient> client =
+             mFsContext.acquireMasterClientResource()) {
+      return client.get().cancelSyncMetadata(taskGroupId);
+    }
   }
 
   /**
@@ -549,7 +675,7 @@ public class BaseFileSystem implements FileSystem {
   }
 
   @FunctionalInterface
-  private interface RpcCallable<T, R> {
+  interface RpcCallable<T, R> {
     R call(T t) throws IOException, AlluxioException;
   }
 
@@ -563,7 +689,7 @@ public class BaseFileSystem implements FileSystem {
    * @param <R> the type of return value for the RPC
    * @return the RPC result
    */
-  private <R> R rpc(RpcCallable<FileSystemMasterClient, R> fn)
+  <R> R rpc(RpcCallable<FileSystemMasterClient, R> fn)
       throws IOException, AlluxioException {
     try (ReinitBlockerResource r = mFsContext.blockReinit();
          CloseableResource<FileSystemMasterClient> client =
@@ -571,20 +697,77 @@ public class BaseFileSystem implements FileSystem {
       // Explicitly connect to trigger loading configuration from meta master.
       client.get().connect();
       return fn.call(client.get());
+    } catch (AlluxioStatusException e) {
+      wrapAndThrowAlluxioStatusException(e);
+      throw UNREACHABLE_CODE_ERROR;
+    }
+  }
+
+  protected void wrapAndThrowAlluxioStatusException(AlluxioStatusException e)
+      throws AlluxioException, IOException {
+    if (e instanceof NotFoundException) {
+      throw new FileDoesNotExistException(e.getMessage());
+    }
+    if (e instanceof AlreadyExistsException) {
+      throw new FileAlreadyExistsException(e.getMessage());
+    }
+    if (e instanceof InvalidArgumentException) {
+      throw new InvalidPathException(e.getMessage());
+    }
+    if (e instanceof FailedPreconditionException) {
+      // A little sketchy, but this should be the only case that throws FailedPrecondition.
+      throw new DirectoryNotEmptyException(e.getMessage());
+    }
+    if (e instanceof UnavailableException || e instanceof UnauthenticatedException) {
+      throw e;
+    }
+    throw e.toAlluxioException();
+  }
+
+  /**
+   * @return the file system context
+   */
+  public FileSystemContext getFileSystemContext() {
+    return mFsContext;
+  }
+
+  /**
+   * Same as {@link BaseFileSystem} rpc except does not release the
+   * client resource. The caller is responsible for releasing the client
+   * resource.
+   * @param fn the RPC call
+   * @param <R> the type of return value for the RPC
+   * @return the RPC result
+   */
+  <R> R rpcKeepClientResource(RpcCallable<CloseableResource<FileSystemMasterClient>, R> fn)
+      throws IOException, AlluxioException {
+    CloseableResource<FileSystemMasterClient> client = null;
+    try (ReinitBlockerResource r = mFsContext.blockReinit()) {
+      client = mFsContext.acquireMasterClientResource();
+      // Explicitly connect to trigger loading configuration from meta master.
+      client.get().connect();
+      return fn.call(client);
     } catch (NotFoundException e) {
+      client.close();
       throw new FileDoesNotExistException(e.getMessage());
     } catch (AlreadyExistsException e) {
+      client.close();
       throw new FileAlreadyExistsException(e.getMessage());
     } catch (InvalidArgumentException e) {
+      client.close();
       throw new InvalidPathException(e.getMessage());
     } catch (FailedPreconditionException e) {
+      client.close();
       // A little sketchy, but this should be the only case that throws FailedPrecondition.
       throw new DirectoryNotEmptyException(e.getMessage());
     } catch (UnavailableException e) {
+      client.close();
       throw e;
     } catch (UnauthenticatedException e) {
+      client.close();
       throw e;
     } catch (AlluxioStatusException e) {
+      client.close();
       throw e.toAlluxioException();
     }
   }

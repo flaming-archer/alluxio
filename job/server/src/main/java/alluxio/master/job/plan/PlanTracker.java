@@ -11,6 +11,7 @@
 
 package alluxio.master.job.plan;
 
+import alluxio.collections.Pair;
 import alluxio.conf.PropertyKey;
 import alluxio.exception.ExceptionMessage;
 import alluxio.exception.JobDoesNotExistException;
@@ -19,6 +20,7 @@ import alluxio.job.JobConfig;
 import alluxio.job.JobServerContext;
 import alluxio.job.plan.PlanConfig;
 import alluxio.job.plan.meta.PlanInfo;
+import alluxio.job.plan.replicate.SetReplicaConfig;
 import alluxio.job.wire.Status;
 import alluxio.master.job.command.CommandManager;
 import alluxio.master.job.workflow.WorkflowTracker;
@@ -27,23 +29,23 @@ import alluxio.wire.WorkerInfo;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
-import net.jcip.annotations.ThreadSafe;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.LinkedBlockingQueue;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import javax.annotation.Nullable;
+import javax.annotation.concurrent.ThreadSafe;
 
 /**
  * The {@link PlanTracker} is used to create, remove, and provide access to the set of currently
@@ -84,7 +86,7 @@ public class PlanTracker {
   private final SortedSet<PlanInfo> mFailed;
 
   /** A FIFO queue used to track jobs which have status {@link Status#isFinished()} as true. */
-  private final LinkedBlockingQueue<PlanInfo> mFinished;
+  private final LinkedList<PlanInfo> mFinished;
 
   private final WorkflowTracker mWorkflowTracker;
 
@@ -112,7 +114,7 @@ public class PlanTracker {
       }
       return Long.signum(right.getId() - left.getId());
     }));
-    mFinished = new LinkedBlockingQueue<>();
+    mFinished = new LinkedList<>();
     mWorkflowTracker = workflowTracker;
   }
 
@@ -178,6 +180,7 @@ public class PlanTracker {
   public synchronized void run(PlanConfig jobConfig, CommandManager manager,
       JobServerContext ctx, List<WorkerInfo> workers, long jobId) throws
       JobDoesNotExistException, ResourceExhaustedException {
+    checkActiveSetReplicaJobs(jobConfig);
     if (removeFinished()) {
       PlanCoordinator planCoordinator = PlanCoordinator.create(manager, ctx,
           workers, jobId, jobConfig, this::statusChangeCallback);
@@ -295,5 +298,36 @@ public class PlanTracker {
                 && (name == null || name.isEmpty()
                 || x.getValue().getPlanInfoWire(false).getName().equals(name)))
         .map(Map.Entry::getKey).collect(Collectors.toSet());
+  }
+
+  /**
+   * Remove expired jobs in PlanTracker.
+   * @param jobIds the list of removed jobId
+   */
+  public void removeJobs(List<Long> jobIds) {
+    mWorkflowTracker.cleanup(jobIds);
+    for (Long jobId : jobIds) {
+      PlanInfo removedPlanInfo = mCoordinators.get(jobId).getPlanInfo();
+      mCoordinators.remove(jobId);
+      mFailed.remove(removedPlanInfo);
+      mFinished.remove(removedPlanInfo);
+    }
+  }
+
+  private void checkActiveSetReplicaJobs(JobConfig jobConfig) throws JobDoesNotExistException {
+    if (jobConfig instanceof SetReplicaConfig) {
+      Set<Pair<String, Long>> activeJobs = mCoordinators.values().stream()
+          .filter(x -> x.getPlanInfo().getJobConfig() instanceof SetReplicaConfig)
+          .map(x -> ((SetReplicaConfig) x.getPlanInfo().getJobConfig()))
+          .map(x -> new Pair<>(x.getPath(), x.getBlockId())).collect(Collectors.toSet());
+      SetReplicaConfig config = (SetReplicaConfig) jobConfig;
+      String path = config.getPath();
+      long blockId = config.getBlockId();
+      Pair<String, Long> block = new Pair<>(path, blockId);
+      if (activeJobs.contains(block)) {
+        throw new JobDoesNotExistException(String.format(
+            "There's SetReplica job running for path:%s blockId:%s, try later", path, blockId));
+      }
+    }
   }
 }

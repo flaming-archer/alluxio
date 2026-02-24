@@ -11,6 +11,8 @@
 
 package alluxio.master.block;
 
+import static java.util.Objects.requireNonNull;
+
 import alluxio.exception.status.NotFoundException;
 import alluxio.grpc.RegisterWorkerPRequest;
 import alluxio.master.block.meta.MasterWorkerInfo;
@@ -20,7 +22,7 @@ import alluxio.resource.LockResource;
 import io.grpc.stub.StreamObserver;
 
 import java.io.Closeable;
-import java.time.Instant;
+import java.time.Clock;
 import java.util.EnumSet;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -31,15 +33,16 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 public class WorkerRegisterContext implements Closeable {
   /** Reference to the worker's metadata in the {@link BlockMaster}. */
-  MasterWorkerInfo mWorker;
+  private final MasterWorkerInfo mWorkerInfo;
 
   /**
    * Locks on the worker's metadata sections. The locks will be held throughout the
    * stream and will be unlocked at the end.
    */
-  private LockResource mWorkerLock;
-  private AtomicBoolean mOpen;
-  private StreamObserver<RegisterWorkerPRequest> mWorkerRequestObserver;
+  private final LockResource mWorkerLock;
+  private final AtomicBoolean mOpen = new AtomicBoolean(true);
+  private final StreamObserver<RegisterWorkerPRequest> mWorkerRequestObserver;
+  private final Clock mClock;
 
   /**
    * Keeps track of the last activity time on this stream.
@@ -49,15 +52,18 @@ public class WorkerRegisterContext implements Closeable {
   private long mLastActivityTimeMs;
 
   private WorkerRegisterContext(
-      MasterWorkerInfo info,
-      StreamObserver<RegisterWorkerPRequest> workerRequestObserver) {
-    mWorker = info;
-    mWorkerRequestObserver = workerRequestObserver;
-    mWorkerLock = info.lockWorkerMeta(EnumSet.of(
+      MasterWorkerInfo workerInfo,
+      StreamObserver<RegisterWorkerPRequest> workerRequestObserver,
+      Clock clock) {
+    mWorkerInfo = requireNonNull(workerInfo, "workerInfo is null");
+    mWorkerRequestObserver = requireNonNull(workerRequestObserver,
+        "mWorkerRequestObserver is null");
+    mWorkerLock = workerInfo.lockWorkerMeta(EnumSet.of(
         WorkerMetaLockSection.STATUS,
         WorkerMetaLockSection.USAGE,
         WorkerMetaLockSection.BLOCKS), false);
-    mOpen = new AtomicBoolean(true);
+    mClock = requireNonNull(clock, "clock is null");
+    mLastActivityTimeMs = mClock.millis();
   }
 
   /**
@@ -66,7 +72,7 @@ public class WorkerRegisterContext implements Closeable {
    * @return worker ID
    */
   public long getWorkerId() {
-    return mWorker.getId();
+    return mWorkerInfo.getId();
   }
 
   /**
@@ -81,7 +87,7 @@ public class WorkerRegisterContext implements Closeable {
   }
 
   void updateTs() {
-    mLastActivityTimeMs = Instant.now().toEpochMilli();
+    mLastActivityTimeMs = mClock.millis();
   }
 
   long getLastActivityTimeMs() {
@@ -114,7 +120,14 @@ public class WorkerRegisterContext implements Closeable {
   public static synchronized WorkerRegisterContext create(
       BlockMaster blockMaster, long workerId,
       StreamObserver<RegisterWorkerPRequest> workerRequestObserver) throws NotFoundException {
-    MasterWorkerInfo info = blockMaster.getWorker(workerId);
-    return new WorkerRegisterContext(info, workerRequestObserver);
+    MasterWorkerInfo workerInfo = blockMaster.getWorker(workerId);
+    return new WorkerRegisterContext(workerInfo, workerRequestObserver, blockMaster.getClock());
+  }
+
+  /**
+   * @return MasterWorkerInfo worker's runtime info and metadata
+   */
+  public MasterWorkerInfo getWorkerInfo() {
+    return mWorkerInfo;
   }
 }

@@ -27,9 +27,12 @@ export const initialOverviewState: IOverviewState = {
     freeCapacity: '',
     journalCheckpointTimeWarning: '',
     journalDiskWarnings: [],
+    leaderId: '',
+    systemStatus: '',
     liveWorkerNodes: 0,
     masterNodeAddress: '',
     replicaBlockCount: '',
+    masterRole: '',
     startTime: '',
     storageTierInfos: [
       {
@@ -46,6 +49,7 @@ export const initialOverviewState: IOverviewState = {
     uptime: '',
     usedCapacity: '',
     version: '',
+    revision: '',
   },
   errors: undefined,
   loading: false,

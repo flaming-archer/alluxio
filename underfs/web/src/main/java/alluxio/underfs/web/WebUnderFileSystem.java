@@ -22,6 +22,7 @@ import alluxio.underfs.UnderFileSystemConfiguration;
 import alluxio.underfs.options.CreateOptions;
 import alluxio.underfs.options.DeleteOptions;
 import alluxio.underfs.options.FileLocationOptions;
+import alluxio.underfs.options.GetFileStatusOptions;
 import alluxio.underfs.options.MkdirsOptions;
 import alluxio.underfs.options.OpenOptions;
 import alluxio.util.UnderFileSystemUtils;
@@ -132,7 +133,7 @@ public class WebUnderFileSystem extends ConsistentUnderFileSystem {
   }
 
   @Override
-  public UfsFileStatus getFileStatus(String path) throws IOException {
+  public UfsFileStatus getFileStatus(String path, GetFileStatusOptions options) throws IOException {
     UfsStatus ufsStatus = getStatus(path);
     if (ufsStatus instanceof UfsFileStatus) {
       return (UfsFileStatus) ufsStatus;
@@ -167,7 +168,7 @@ public class WebUnderFileSystem extends ConsistentUnderFileSystem {
         contentLength = Long.parseLong(header.getValue());
       } else if (headerName.equalsIgnoreCase("Last-Modified")) {
         lastModified = parseTimestamp(header.getValue(),
-            mUfsConf.get(PropertyKey.UNDERFS_WEB_HEADER_LAST_MODIFIED));
+            mUfsConf.getString(PropertyKey.UNDERFS_WEB_HEADER_LAST_MODIFIED));
       }
     }
 
@@ -207,7 +208,7 @@ public class WebUnderFileSystem extends ConsistentUnderFileSystem {
       Elements titleElements = Jsoup.connect(path).get().select("title");
       if (titleElements.size() > 0) {
         String title = titleElements.get(0).text();
-        List<String> titles = mUfsConf.getList(PropertyKey.UNDERFS_WEB_TITLES, ",");
+        List<String> titles = mUfsConf.getList(PropertyKey.UNDERFS_WEB_TITLES);
         for (final String t : titles) {
           if (title.contains(t)) {
             return true;
@@ -273,7 +274,7 @@ public class WebUnderFileSystem extends ConsistentUnderFileSystem {
       return null;
     }
 
-    List<String> parentNames = mUfsConf.getList(PropertyKey.UNDERFS_WEB_PARENT_NAMES, ",");
+    List<String> parentNames = mUfsConf.getList(PropertyKey.UNDERFS_WEB_PARENT_NAMES);
     int flagIndex = -1;
     for (int i = 0; flagIndex == -1 && i < listElements.size(); i++) {
       for (final String flag : parentNames) {

@@ -11,23 +11,28 @@
 
 package alluxio.master.file.contexts;
 
+import alluxio.Constants;
 import alluxio.client.WriteType;
-import alluxio.conf.ServerConfiguration;
+import alluxio.conf.Configuration;
 import alluxio.grpc.CreateDirectoryPOptions;
 import alluxio.grpc.CreateFilePOptions;
 import alluxio.grpc.TtlAction;
 import alluxio.grpc.WritePType;
+import alluxio.grpc.XAttrPropagationStrategy;
 import alluxio.security.authorization.AclEntry;
 import alluxio.security.authorization.Mode;
+import alluxio.util.CommonUtils;
 import alluxio.util.SecurityUtils;
 
 import com.google.common.base.MoreObjects;
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.protobuf.GeneratedMessageV3;
 
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 import javax.annotation.Nullable;
 
 /**
@@ -46,8 +51,11 @@ public abstract class CreatePathContext<T extends GeneratedMessageV3.Builder<?>,
   protected String mOwner;
   protected String mGroup;
   protected boolean mMetadataLoad;
+  protected boolean mPersistNonExistingParentDirectories = true;
   private WriteType mWriteType;
   protected Map<String, byte[]> mXAttr;
+  protected XAttrPropagationStrategy mXAttrPropStrat;
+  @Nullable protected Supplier<String> mMissingDirFingerprint = null;
 
   //
   // Values for the below fields will be extracted from given proto options
@@ -61,6 +69,7 @@ public abstract class CreatePathContext<T extends GeneratedMessageV3.Builder<?>,
   protected boolean mRecursive;
   protected long mTtl;
   protected TtlAction mTtlAction;
+  @Nullable protected String mFingerprint;
 
   /**
    * Creates context with given option data.
@@ -75,19 +84,26 @@ public abstract class CreatePathContext<T extends GeneratedMessageV3.Builder<?>,
     mMetadataLoad = false;
     mGroup = "";
     mOwner = "";
-    if (SecurityUtils.isAuthenticationEnabled(ServerConfiguration.global())) {
-      mOwner = SecurityUtils.getOwnerFromGrpcClient(ServerConfiguration.global());
-      mGroup = SecurityUtils.getGroupFromGrpcClient(ServerConfiguration.global());
+    mFingerprint = null;
+    if (SecurityUtils.isAuthenticationEnabled(Configuration.global())) {
+      mOwner = SecurityUtils.getOwnerFromGrpcClient(Configuration.global());
+      mGroup = SecurityUtils.getGroupFromGrpcClient(Configuration.global());
     }
     // Initialize mPersisted based on proto write type.
     WritePType writeType = WritePType.NONE;
+    mXAttr = null;
     if (optionsBuilder instanceof CreateFilePOptions.Builder) {
       writeType = ((CreateFilePOptions.Builder) optionsBuilder).getWriteType();
+      mXAttr = CommonUtils.convertFromByteString(
+          ((CreateFilePOptions.Builder) optionsBuilder).getXattrMap());
+      mXAttrPropStrat = ((CreateFilePOptions.Builder) optionsBuilder).getXattrPropStrat();
     } else if (optionsBuilder instanceof CreateDirectoryPOptions.Builder) {
       writeType = ((CreateDirectoryPOptions.Builder) optionsBuilder).getWriteType();
+      mXAttr = CommonUtils.convertFromByteString(
+          ((CreateDirectoryPOptions.Builder) optionsBuilder).getXattrMap());
+      mXAttrPropStrat = ((CreateDirectoryPOptions.Builder) optionsBuilder).getXattrPropStrat();
     }
     mWriteType = WriteType.fromProto(writeType);
-    mXAttr = null;
   }
 
   private void loadExtractedFields() {
@@ -260,12 +276,18 @@ public abstract class CreatePathContext<T extends GeneratedMessageV3.Builder<?>,
   }
 
   /**
-   * @param metadataLoad the flag value to use; if true, the create path is a result of a metadata
+   * @param metadataLoad the flag value to use; if true, the created path is a result of a metadata
    *        load
+   * @param persistNonExistingParentDirectories if true any non-existing parent directories
+   *  will also be created on the UFS (this can only be
+   *  set to false if metadataLoad is set to true)
    * @return the updated context
    */
-  public K setMetadataLoad(boolean metadataLoad) {
+  public K setMetadataLoad(
+      boolean metadataLoad, boolean persistNonExistingParentDirectories) {
+    Preconditions.checkState(metadataLoad || persistNonExistingParentDirectories);
     mMetadataLoad = metadataLoad;
+    mPersistNonExistingParentDirectories = persistNonExistingParentDirectories;
     return getThis();
   }
 
@@ -287,6 +309,55 @@ public abstract class CreatePathContext<T extends GeneratedMessageV3.Builder<?>,
   }
 
   /**
+   * @return the fingerprint
+   */
+  @Nullable
+  public String getFingerprint() {
+    return mFingerprint;
+  }
+
+  /**
+   * @param fingerprint the fingerprint
+   * @return the updated context
+   */
+  public K setFingerprint(String fingerprint) {
+    mFingerprint = fingerprint;
+    return getThis();
+  }
+
+  /**
+   * @return the fingerprint for missing directories
+   */
+  public String getMissingDirFingerprint() {
+    return mMissingDirFingerprint == null
+        ? Constants.INVALID_UFS_FINGERPRINT : mMissingDirFingerprint.get();
+  }
+
+  /**
+   * @param fingerprint the fingerprint to be used when creating missing nested directories
+   * @return the updated context
+   */
+  public K setMissingDirFingerprint(Supplier<String> fingerprint) {
+    mMissingDirFingerprint = fingerprint;
+    return getThis();
+  }
+
+  /**
+   * @return extended attributes propagation strategy of this context
+   */
+  public XAttrPropagationStrategy getXAttrPropStrat() {
+    return mXAttrPropStrat;
+  }
+
+  /**
+   * @return true if non-existing parent directories should be persisted,
+   * can only be false if the metadataLoad flag is true
+   */
+  public boolean isPersistNonExistingParentDirectories() {
+    return mPersistNonExistingParentDirectories;
+  }
+
+  /**
    * @return the metadataLoad flag; if true, the create path is a result of a metadata load
    */
   public boolean isMetadataLoad() {
@@ -304,6 +375,7 @@ public abstract class CreatePathContext<T extends GeneratedMessageV3.Builder<?>,
         .add("MetadataLoad", mMetadataLoad)
         .add("writeType", mWriteType)
         .add("xattr", mXAttr)
+        .add("Fingerprint", mFingerprint)
         .toString();
   }
 }

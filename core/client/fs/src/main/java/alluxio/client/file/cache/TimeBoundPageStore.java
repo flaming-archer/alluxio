@@ -14,8 +14,10 @@ package alluxio.client.file.cache;
 import alluxio.client.file.cache.store.PageStoreOptions;
 import alluxio.exception.PageNotFoundException;
 import alluxio.exception.status.ResourceExhaustedException;
+import alluxio.file.ReadTargetBuffer;
 import alluxio.metrics.MetricKey;
 import alluxio.metrics.MetricsSystem;
+import alluxio.network.protocol.databuffer.DataFileChannel;
 
 import com.codahale.metrics.Counter;
 import com.google.common.base.Preconditions;
@@ -24,6 +26,7 @@ import com.google.common.util.concurrent.SimpleTimeLimiter;
 import com.google.common.util.concurrent.TimeLimiter;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -32,7 +35,6 @@ import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import java.util.stream.Stream;
 
 /**
  * A wrapper class on PageStore with timeout. Note that, this page store will not queue any request.
@@ -56,16 +58,20 @@ public class TimeBoundPageStore implements PageStore {
   }
 
   @Override
-  public void put(PageId pageId, byte[] page) throws ResourceExhaustedException, IOException {
+  public void put(PageId pageId,
+      ByteBuffer page,
+      boolean isTemporary) throws IOException {
     Callable<Void> callable = () -> {
-      mPageStore.put(pageId, page);
+      mPageStore.put(pageId, page, isTemporary);
       return null;
     };
     try {
       mTimeLimter.callWithTimeout(callable, mTimeoutMs, TimeUnit.MILLISECONDS);
     } catch (InterruptedException e) {
+      // Task got cancelled by others, interrupt the current thread
+      // and then throw a runtime ex to make the higher level stop.
       Thread.currentThread().interrupt();
-      throw new IOException(e);
+      throw new RuntimeException(e);
     } catch (TimeoutException e) {
       Metrics.STORE_PUT_TIMEOUT.inc();
       throw new IOException(e);
@@ -83,15 +89,17 @@ public class TimeBoundPageStore implements PageStore {
   }
 
   @Override
-  public int get(PageId pageId, int pageOffset, int bytesToRead, byte[] buffer, int bufferOffset)
-      throws IOException, PageNotFoundException {
+  public int get(PageId pageId, int pageOffset, int bytesToRead, ReadTargetBuffer target,
+      boolean isTemporary) throws IOException, PageNotFoundException {
     Callable<Integer> callable = () ->
-        mPageStore.get(pageId, pageOffset, bytesToRead, buffer, bufferOffset);
+        mPageStore.get(pageId, pageOffset, bytesToRead, target, isTemporary);
     try {
       return mTimeLimter.callWithTimeout(callable, mTimeoutMs, TimeUnit.MILLISECONDS);
     } catch (InterruptedException e) {
+      // Task got cancelled by others, interrupt the current thread
+      // and then throw a runtime ex to make the higher level stop.
       Thread.currentThread().interrupt();
-      throw new IOException(e);
+      throw new RuntimeException(e);
     } catch (TimeoutException e) {
       Metrics.STORE_GET_TIMEOUT.inc();
       throw new IOException(e);
@@ -113,8 +121,10 @@ public class TimeBoundPageStore implements PageStore {
     try {
       mTimeLimter.callWithTimeout(callable, mTimeoutMs, TimeUnit.MILLISECONDS);
     } catch (InterruptedException e) {
+      // Task got cancelled by others, interrupt the current thread
+      // and then throw a runtime ex to make the higher level stop.
       Thread.currentThread().interrupt();
-      throw new IOException(e);
+      throw new RuntimeException(e);
     } catch (TimeoutException e) {
       Metrics.STORE_DELETE_TIMEOUT.inc();
       throw new IOException(e);
@@ -128,13 +138,9 @@ public class TimeBoundPageStore implements PageStore {
   }
 
   @Override
-  public Stream<PageInfo> getPages() throws IOException {
-    return mPageStore.getPages();
-  }
-
-  @Override
-  public long getCacheSize() {
-    return mPageStore.getCacheSize();
+  public DataFileChannel getDataFileChannel(PageId pageId, int pageOffset, int bytesToRead,
+                                            boolean isTemporary) throws PageNotFoundException {
+    return mPageStore.getDataFileChannel(pageId, pageOffset, bytesToRead, isTemporary);
   }
 
   @Override

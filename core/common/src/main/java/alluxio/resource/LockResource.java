@@ -30,6 +30,9 @@ import javax.annotation.Nullable;
  *     ...
  *   }
  * </pre>
+ *
+ * The subclasses will be tracked by the leak detector.
+ * The subclasses should call super.close() in their close(), otherwise a leak will be reported.
  */
 // extends Closeable instead of AutoCloseable to enable usage with Guava's Closer.
 public class LockResource implements Closeable {
@@ -60,7 +63,7 @@ public class LockResource implements Closeable {
    * This method may use the {@link Lock#tryLock()} method to gain ownership of the locks. The
    * reason one might want to use this is to avoid the fairness heuristics within the
    * {@link java.util.concurrent.locks.ReentrantReadWriteLock}'s NonFairSync which may block reader
-   * threads if a writer if the first in the queue.
+   * threads if a writer is the first in the queue.
    *
    * @param lock the lock to acquire
    * @param acquireLock whether to lock the lock
@@ -76,7 +79,7 @@ public class LockResource implements Closeable {
    * This method may use the {@link Lock#tryLock()} method to gain ownership of the locks. The
    * reason one might want to use this is to avoid the fairness heuristics within the
    * {@link java.util.concurrent.locks.ReentrantReadWriteLock}'s NonFairSync which may block reader
-   * threads if a writer if the first in the queue.
+   * threads if a writer is the first in the queue.
    *
    * @param lock the lock to acquire
    * @param acquireLock whether to lock the lock

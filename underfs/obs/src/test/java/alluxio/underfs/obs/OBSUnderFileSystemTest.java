@@ -12,7 +12,7 @@
 package alluxio.underfs.obs;
 
 import alluxio.AlluxioURI;
-import alluxio.ConfigurationTestUtils;
+import alluxio.conf.Configuration;
 import alluxio.underfs.UnderFileSystemConfiguration;
 import alluxio.underfs.options.DeleteOptions;
 
@@ -23,7 +23,7 @@ import com.obs.services.model.ObjectMetadata;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
-import org.mockito.Matchers;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mockito;
 
 import java.io.IOException;
@@ -51,7 +51,7 @@ public class OBSUnderFileSystemTest {
   public void before() throws InterruptedException, ObsException {
     mClient = Mockito.mock(ObsClient.class);
     mOBSUnderFileSystem = new OBSUnderFileSystem(new AlluxioURI(""), mClient, BUCKET_NAME,
-        BUCKET_TYPE, UnderFileSystemConfiguration.defaults(ConfigurationTestUtils.defaults()));
+        BUCKET_TYPE, UnderFileSystemConfiguration.defaults(Configuration.global()));
   }
 
   /**
@@ -59,7 +59,7 @@ public class OBSUnderFileSystemTest {
    */
   @Test
   public void deleteNonRecursiveOnServiceException() throws IOException {
-    Mockito.when(mClient.listObjects(Matchers.any(ListObjectsRequest.class)))
+    Mockito.when(mClient.listObjects(ArgumentMatchers.any(ListObjectsRequest.class)))
         .thenThrow(ObsException.class);
 
     boolean result = mOBSUnderFileSystem.deleteDirectory(PATH,
@@ -72,7 +72,7 @@ public class OBSUnderFileSystemTest {
    */
   @Test
   public void deleteRecursiveOnServiceException() throws IOException {
-    Mockito.when(mClient.listObjects(Matchers.any(ListObjectsRequest.class)))
+    Mockito.when(mClient.listObjects(ArgumentMatchers.any(ListObjectsRequest.class)))
         .thenThrow(ObsException.class);
 
     boolean result = mOBSUnderFileSystem.deleteDirectory(PATH,
@@ -86,7 +86,7 @@ public class OBSUnderFileSystemTest {
    */
   @Test
   public void renameOnServiceException() throws IOException {
-    Mockito.when(mClient.listObjects(Matchers.any(ListObjectsRequest.class)))
+    Mockito.when(mClient.listObjects(ArgumentMatchers.any(ListObjectsRequest.class)))
         .thenThrow(ObsException.class);
 
     boolean result = mOBSUnderFileSystem.renameFile(SRC, DST);
@@ -123,7 +123,7 @@ public class OBSUnderFileSystemTest {
 
     // PFS Bucket
     mOBSUnderFileSystem = new OBSUnderFileSystem(new AlluxioURI(""), mClient, BUCKET_NAME, "pfs",
-        UnderFileSystemConfiguration.defaults(ConfigurationTestUtils.defaults()));
+        UnderFileSystemConfiguration.defaults(Configuration.global()));
     Assert.assertNotNull(mOBSUnderFileSystem.getObjectStatus("pfs_file1"));
     Assert.assertNull(mOBSUnderFileSystem.getObjectStatus("pfs_file1/"));
     Assert.assertNull(mOBSUnderFileSystem.getObjectStatus("dir1"));
@@ -132,7 +132,7 @@ public class OBSUnderFileSystemTest {
 
     // OBS Bucket
     mOBSUnderFileSystem = new OBSUnderFileSystem(new AlluxioURI(""), mClient, BUCKET_NAME, "obs",
-        UnderFileSystemConfiguration.defaults(ConfigurationTestUtils.defaults()));
+        UnderFileSystemConfiguration.defaults(Configuration.global()));
     Mockito.when(mClient.getObjectMetadata(BUCKET_NAME, "dir1"))
         .thenReturn(null);
     Assert.assertNotNull(mOBSUnderFileSystem.getObjectStatus("obs_file1"));
@@ -159,7 +159,7 @@ public class OBSUnderFileSystemTest {
         .thenReturn(dirMeta);
 
     mOBSUnderFileSystem = new OBSUnderFileSystem(new AlluxioURI(""), mClient, BUCKET_NAME, "obs",
-        UnderFileSystemConfiguration.defaults(ConfigurationTestUtils.defaults()));
+        UnderFileSystemConfiguration.defaults(Configuration.global()));
     Assert.assertNotNull(mOBSUnderFileSystem.getObjectStatus("pfs_file1"));
     Assert.assertNotNull(mOBSUnderFileSystem.getObjectStatus("dir1"));
   }

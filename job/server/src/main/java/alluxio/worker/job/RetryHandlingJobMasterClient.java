@@ -13,6 +13,7 @@ package alluxio.worker.job;
 
 import alluxio.AbstractJobMasterClient;
 import alluxio.Constants;
+import alluxio.RuntimeConstants;
 import alluxio.grpc.GrpcUtils;
 import alluxio.grpc.JobCommand;
 import alluxio.grpc.JobHeartbeatPRequest;
@@ -21,6 +22,7 @@ import alluxio.grpc.JobMasterWorkerServiceGrpc;
 import alluxio.grpc.RegisterJobWorkerPRequest;
 import alluxio.grpc.ServiceType;
 import alluxio.job.wire.JobWorkerHealth;
+import alluxio.util.CommonUtils;
 import alluxio.wire.WorkerNetAddress;
 
 import org.slf4j.Logger;
@@ -72,7 +74,9 @@ public final class RetryHandlingJobMasterClient extends AbstractJobMasterClient
   @Override
   public long registerWorker(final WorkerNetAddress address) throws IOException {
     return retryRPC(() -> mClient.registerJobWorker(RegisterJobWorkerPRequest.newBuilder()
-            .setWorkerNetAddress(GrpcUtils.toProto(address)).build()).getId(),
+            .setWorkerNetAddress(GrpcUtils.toProto(address))
+            .setVersion(RuntimeConstants.CURRENT_VERSION_INFO)
+            .build()).getId(),
         RPC_LOG, "RegisterWorker", "address=%s", address);
   }
 
@@ -83,6 +87,7 @@ public final class RetryHandlingJobMasterClient extends AbstractJobMasterClient
         mClient.heartbeat(JobHeartbeatPRequest.newBuilder()
             .setJobWorkerHealth(jobWorkerHealth.toProto()).addAllTaskInfos(taskInfoList).build())
             .getCommandsList(),
-        RPC_LOG, "Heartbeat", "jobWorkerHealth=%s,taskInfoList=%s", jobWorkerHealth, taskInfoList);
+        RPC_LOG, "Heartbeat", "jobWorkerHealth=%s,taskInfoList=%s", jobWorkerHealth,
+            CommonUtils.summarizeCollection(taskInfoList));
   }
 }

@@ -14,6 +14,7 @@ package alluxio.common;
 import alluxio.HealthCheckClient;
 import alluxio.conf.AlluxioConfiguration;
 import alluxio.exception.status.AlluxioStatusException;
+import alluxio.exception.status.NotFoundException;
 import alluxio.exception.status.UnavailableException;
 import alluxio.grpc.ServiceType;
 import alluxio.retry.RetryPolicy;
@@ -66,8 +67,9 @@ public class RpcPortHealthCheckClient implements HealthCheckClient {
         NetworkAddressUtils.pingService(mNodeAddress, mServiceType, mConf, mUserState);
         LOG.debug("Successfully connected to {}", mNodeAddress);
         return true;
-      } catch (UnavailableException e) {
-        LOG.debug("Failed to connect to {}", mNodeAddress);
+      } catch (UnavailableException | NotFoundException e) {
+        LOG.debug("Failed to connect to {} on attempt #{}", mNodeAddress,
+            retry.getAttemptCount());
       } catch (AlluxioStatusException e) {
         throw new RuntimeException(e);
       }

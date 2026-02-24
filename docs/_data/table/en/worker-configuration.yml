@@ -10,10 +10,14 @@ alluxio.worker.block.annotator.lrfu.step.factor:
   'A factor in [0, 1] to control the behavior of LRFU: smaller value makes LRFU more similar to LFU; and larger value makes LRFU closer to LRU.'
 alluxio.worker.block.heartbeat.interval:
   'The interval between block workers'' heartbeats to update block status, storage health and other workers'' information to Alluxio Master.'
+alluxio.worker.block.heartbeat.report.size.threshold:
+  'When alluxio.worker.register.to.all.masters=true, because a worker will send block reports to all masters, we use a threshold to limit the unsent block report size in worker''s memory. If the worker block heartbeat is larger than the threshold, we discard the heartbeat message and force the worker to register with that master with a full report.'
 alluxio.worker.block.heartbeat.timeout:
   'The timeout value of block workers'' heartbeats. If the worker can''t connect to master before this interval expires, the worker will exit.'
 alluxio.worker.block.master.client.pool.size:
   'The block master client pool size on the Alluxio workers.'
+alluxio.worker.block.store.type:
+  'The implementation of LocalBlockStore that can be instantiated.'
 alluxio.worker.container.hostname:
   'The container hostname if worker is running in a container.'
 alluxio.worker.data.folder:
@@ -34,12 +38,6 @@ alluxio.worker.free.space.timeout:
   'The duration for which a worker will wait for eviction to make space available for a client write request.'
 alluxio.worker.fuse.enabled:
   'If true, launch worker embedded Fuse application.'
-alluxio.worker.fuse.mount.alluxio.path:
-  'The Alluxio path to mount to the given Fuse mount point configured by alluxio.worker.fuse.mount.point in this worker.'
-alluxio.worker.fuse.mount.options:
-  'The platform specific Fuse mount options to mount the given Fuse mount point. If multiple mount options are provided, separate them with comma.'
-alluxio.worker.fuse.mount.point:
-  'The absolute local filesystem path that this worker will mount Alluxio path to.'
 alluxio.worker.hostname:
   'The hostname of Alluxio worker.'
 alluxio.worker.jvm.monitor.enabled:
@@ -99,9 +97,11 @@ alluxio.worker.network.netty.watermark.high:
 alluxio.worker.network.netty.watermark.low:
   'Once the high watermark limit is reached, the queue must be flushed down to the low watermark before switching back to writable.'
 alluxio.worker.network.netty.worker.threads:
-  'How many threads to use for processing requests. Zero defaults to #cpuCores * 2.'
+  'Number of threads to use for processing requests in worker'
 alluxio.worker.network.permit.keepalive.time:
   'Specify the most aggressive keep-alive time clients are permitted to configure. The server will try to detect clients exceeding this rate and when detected will forcefully close the connection.'
+alluxio.worker.network.reader.buffer.pooled:
+  'Whether it is using pooled direct buffer or unpooled wrapped buffer when creating a buffer for remote read'
 alluxio.worker.network.reader.buffer.size:
   'When a client reads from a remote worker, the maximum amount of data not received by client allowed before the worker pauses sending more data. If this value is lower than read chunk size, read performance may be impacted as worker waits more often for buffer to free up. Higher value will increase the memory consumed by each read request.'
 alluxio.worker.network.reader.max.chunk.size.bytes:
@@ -112,6 +112,38 @@ alluxio.worker.network.writer.buffer.size.messages:
   'When a client writes to a remote worker, the maximum number of data messages to buffer by the server for each request.'
 alluxio.worker.network.zerocopy.enabled:
   'Whether zero copy is enabled on worker when processing data streams.'
+alluxio.worker.page.store.async.restore.enabled:
+  'If this is enabled, cache restore state asynchronously.'
+alluxio.worker.page.store.async.write.enabled:
+  'If this is enabled, cache data asynchronously.'
+alluxio.worker.page.store.async.write.threads:
+  'Number of threads to asynchronously cache data.'
+alluxio.worker.page.store.dirs:
+  'A list of the directories where pages in paged block store are stored.'
+alluxio.worker.page.store.eviction.retries:
+  'Max number of eviction retries.'
+alluxio.worker.page.store.evictor.class:
+  'The strategy that worker uses to evict local cached pages when running out of space. Currently valid options include `alluxio.client.file.cache.evictor.LRUCacheEvictor`,`alluxio.client.file.cache.evictor.LFUCacheEvictor`.'
+alluxio.worker.page.store.evictor.lfu.logbase:
+  'The log base for client cache LFU evictor bucket index.'
+alluxio.worker.page.store.evictor.nondeterministic.enabled:
+  'If this is enabled, the evictor picks uniformly from the worst k elements.Currently only LRU is supported.'
+alluxio.worker.page.store.local.store.file.buckets:
+  'The number of file buckets for the page blocked store on local file system. It is recommended to set this to a high value if the number of unique files is expected to be high (# files / file buckets &lt;= 100,000).'
+alluxio.worker.page.store.overhead:
+  'A fraction value representing the storage overhead writing to disk. For example, with 1GB allocated cache space, and 10% storage overhead we expect no more than 1024MB / (1 + 10%) user data to store.'
+alluxio.worker.page.store.page.size:
+  'Size of each page in worker paged block store.'
+alluxio.worker.page.store.quota.enabled:
+  'Whether to support cache quota.'
+alluxio.worker.page.store.sizes:
+  'A list of maximum cache size for each cache directory.'
+alluxio.worker.page.store.timeout.duration:
+  'The timeout duration for local cache I/O operations (reading/writing/deleting). When this property is a positive value,local cache operations after timing out will fail and fallback to external file system but transparent to applications; when this property is a negative value, this feature is disabled.'
+alluxio.worker.page.store.timeout.threads:
+  'The number of threads to handle cache I/O operation timeout, when alluxio.worker.page.store.timeout.duration is positive.'
+alluxio.worker.page.store.type:
+  'The type of page store to use for worker page store. Can be either `LOCAL` or `ROCKS`. The `LOCAL` page store stores all pages in a directory, the `ROCKS` page store utilizes rocksDB to persist the data.'
 alluxio.worker.principal:
   'Kerberos principal for Alluxio worker.'
 alluxio.worker.ramdisk.size:
@@ -134,6 +166,8 @@ alluxio.worker.register.stream.enabled:
   'When the worker registers with the master, whether the request should be broken into a stream of smaller batches. This is useful when the worker''s storage is large and we expect a large number of blocks. '
 alluxio.worker.register.stream.response.timeout:
   'When the worker registers the master with streaming, the worker will be sending messages to the master during the streaming.During an active stream if the master have not responded to the worker for more than this timeout, the worker will consider the master is hanging and close the stream.'
+alluxio.worker.register.to.all.masters:
+  'If enabled, workers will register themselves to all masters, instead of primary master only. This can be used to save the master failover time because the new primary immediately knows all existing workers and blocks. Can only be enabled when alluxio.standby.master.grpc.enabled is turned on.'
 alluxio.worker.remote.io.slow.threshold:
   'The time threshold for when a worker remote IO (read or write) of a single buffer is considered slow. When slow IO occurs, it is logged by a sampling logger.'
 alluxio.worker.reviewer.class:
@@ -142,10 +176,30 @@ alluxio.worker.reviewer.probabilistic.hardlimit.bytes:
   'This is used by the `alluxio.worker.block.reviewer.ProbabilisticBufferReviewer`. When the free space in a storage dir falls below this hard limit, the ProbabilisticBufferReviewer will stop accepting new blocks into it.This is because we may load more data into existing blocks in the directory and their sizes may expand.'
 alluxio.worker.reviewer.probabilistic.softlimit.bytes:
   'This is used by the `alluxio.worker.block.reviewer.ProbabilisticBufferReviewer`. We attempt to leave a buffer in each storage directory. When the free space in a certain storage directory on the worker falls below this soft limit, the chance that the Reviewer accepts new blocks into this directory goes down. This chance keeps falling linearly until it reaches 0, when the available space reaches the hard limit.'
+alluxio.worker.rpc.executor.core.pool.size:
+  'The number of threads to keep in thread pool of worker RPC ExecutorService.'
+alluxio.worker.rpc.executor.fjp.async:
+  'This property is effective when alluxio.worker.rpc.executor.type is set to ForkJoinPool. if true, it establishes local first-in-first-out scheduling mode for forked tasks that are never joined. This mode may be more appropriate than default locally stack-based mode in applications in which worker threads only process event-style asynchronous tasks.'
+alluxio.worker.rpc.executor.fjp.min.runnable:
+  'This property is effective when alluxio.worker.rpc.executor.type is set to ForkJoinPool. It controls the minimum allowed number of core threads not blocked. A value of 1 ensures liveness. A larger value might improve throughput but might also increase overhead.'
+alluxio.worker.rpc.executor.fjp.parallelism:
+  'This property is effective when alluxio.worker.rpc.executor.type is set to ForkJoinPool. It controls the parallelism level (internal queue count) of master RPC ExecutorService.'
+alluxio.worker.rpc.executor.keepalive:
+  'The keep alive time of a thread in worker RPC ExecutorServicelast used before this thread is terminated (and replaced if necessary).'
+alluxio.worker.rpc.executor.max.pool.size:
+  'The maximum number of threads allowed for worker RPC ExecutorService. When the maximum is reached, attempts to replace blocked threads fail.'
+alluxio.worker.rpc.executor.tpe.allow.core.threads.timeout:
+  'This property is effective when alluxio.worker.rpc.executor.type is set to ThreadPoolExecutor. It controls whether core threads can timeout and terminate when there is no work.'
+alluxio.worker.rpc.executor.tpe.queue.type:
+  'This property is effective when alluxio.worker.rpc.executor.type is set to TPE. It specifies the internal task queue that''s used by RPC ExecutorService. Supported values are: LINKED_BLOCKING_QUEUE, LINKED_BLOCKING_QUEUE_WITH_CAP, ARRAY_BLOCKING_QUEUE and SYNCHRONOUS_BLOCKING_QUEUE'
+alluxio.worker.rpc.executor.type:
+  'Type of ExecutorService for Alluxio worker gRPC server. Supported values are TPE (for ThreadPoolExecutor) and FJP (for ForkJoinPool).'
 alluxio.worker.rpc.port:
   'The port for Alluxio worker''s RPC service.'
 alluxio.worker.session.timeout:
   'Timeout between worker and client connection indicating a lost session connection.'
+alluxio.worker.startup.timeout:
+  'Maximum time to wait for worker startup.'
 alluxio.worker.storage.checker.enabled:
   'Whether periodic storage health checker is enabled on Alluxio workers.'
 alluxio.worker.tieredstore.block.lock.readers:
@@ -192,8 +246,6 @@ alluxio.worker.tieredstore.level2.watermark.low.ratio:
   'The low watermark of the space in the third storage tier (a value between 0 and 1).'
 alluxio.worker.tieredstore.levels:
   'The number of storage tiers on the worker.'
-alluxio.worker.ufs.block.open.timeout:
-  'Timeout to open a block from UFS.'
 alluxio.worker.ufs.instream.cache.enabled:
   'Enable caching for seekable under storage input stream, so that subsequent seek operations on the same file will reuse the cached input stream. This will improve position read performance as the open operations of some under file system would be expensive. The cached input stream would be stale, when the UFS file is modified without notifying alluxio. '
 alluxio.worker.ufs.instream.cache.expiration.time:

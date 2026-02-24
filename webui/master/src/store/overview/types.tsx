@@ -26,9 +26,12 @@ export interface IOverview {
   freeCapacity: string;
   journalCheckpointTimeWarning: string;
   journalDiskWarnings: string[];
+  leaderId: string;
+  systemStatus: string;
   liveWorkerNodes: number;
   masterNodeAddress: string;
   replicaBlockCount: string;
+  masterRole: string;
   startTime: string;
   storageTierInfos: IStorageTierInfo[];
   totalPath: string;
@@ -37,6 +40,7 @@ export interface IOverview {
   usedCapacity: string;
 
   version: string;
+  revision: string;
 }
 
 export enum OverviewActionTypes {

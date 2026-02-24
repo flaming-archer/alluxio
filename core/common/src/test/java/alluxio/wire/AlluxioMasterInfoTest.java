@@ -60,7 +60,7 @@ public class AlluxioMasterInfoTest {
     Random random = new Random();
 
     Capacity capacity = CapacityTest.createRandom();
-    Map<String, String> configuration = new HashMap<>();
+    Map<String, Object> configuration = new HashMap<>();
     long numConfiguration = random.nextInt(10);
     for (int i = 0; i < numConfiguration; i++) {
       configuration.put(CommonUtils.randomAlphaNumString(random.nextInt(10)),
@@ -91,6 +91,16 @@ public class AlluxioMasterInfoTest {
     long numWorkers = random.nextInt(10);
     for (int i = 0; i < numWorkers; i++) {
       workers.add(WorkerInfoTest.createRandom());
+    }
+    List<MasterInfo> masters = new ArrayList<>();
+    long numMasters = random.nextInt(10);
+    for (int i = 0; i < numMasters; i++) {
+      masters.add(MasterInfoTest.createRandom());
+    }
+    List<MasterInfo> lostMasters = new ArrayList<>();
+    long numLostMasters = random.nextInt(10);
+    for (int i = 0; i < numLostMasters; i++) {
+      lostMasters.add(MasterInfoTest.createRandom());
     }
 
     result.setCapacity(capacity);

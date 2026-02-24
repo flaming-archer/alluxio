@@ -29,6 +29,8 @@ import com.qcloud.cos.auth.BasicCOSCredentials;
 import com.qcloud.cos.auth.COSCredentials;
 import com.qcloud.cos.exception.CosClientException;
 import com.qcloud.cos.model.COSObjectSummary;
+import com.qcloud.cos.model.DeleteObjectsRequest;
+import com.qcloud.cos.model.DeleteObjectsResult;
 import com.qcloud.cos.model.ListObjectsRequest;
 import com.qcloud.cos.model.ObjectListing;
 import com.qcloud.cos.model.ObjectMetadata;
@@ -40,7 +42,9 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.Date;
 import java.util.List;
+import java.util.stream.Collectors;
 import javax.annotation.concurrent.ThreadSafe;
 
 /**
@@ -80,10 +84,10 @@ public class COSUnderFileSystem extends ObjectUnderFileSystem {
         "Property %s is required to connect to COS", PropertyKey.COS_REGION);
     Preconditions.checkArgument(conf.isSet(PropertyKey.COS_APP_ID),
         "Property %s is required to connect to COS", PropertyKey.COS_APP_ID);
-    String accessKey = conf.get(PropertyKey.COS_ACCESS_KEY);
-    String secretKey = conf.get(PropertyKey.COS_SECRET_KEY);
-    String regionName = conf.get(PropertyKey.COS_REGION);
-    String appId = conf.get(PropertyKey.COS_APP_ID);
+    String accessKey = conf.getString(PropertyKey.COS_ACCESS_KEY);
+    String secretKey = conf.getString(PropertyKey.COS_SECRET_KEY);
+    String regionName = conf.getString(PropertyKey.COS_REGION);
+    String appId = conf.getString(PropertyKey.COS_APP_ID);
 
     COSCredentials cred = new BasicCOSCredentials(accessKey, secretKey);
     ClientConfig clientConfig = createCOSClientConfig(regionName, conf);
@@ -149,7 +153,7 @@ public class COSUnderFileSystem extends ObjectUnderFileSystem {
   @Override
   protected OutputStream createObject(String key) throws IOException {
     return new COSOutputStream(mBucketNameInternal, key, mClient,
-        mUfsConf.getList(PropertyKey.TMP_DIRS, ","));
+        mUfsConf.getList(PropertyKey.TMP_DIRS));
   }
 
   @Override
@@ -161,6 +165,25 @@ public class COSUnderFileSystem extends ObjectUnderFileSystem {
       return false;
     }
     return true;
+  }
+
+  @Override
+  protected List<String> deleteObjects(List<String> keys) throws IOException {
+    try {
+      DeleteObjectsRequest request = new DeleteObjectsRequest(mBucketName);
+      List<DeleteObjectsRequest.KeyVersion> keyVersions = keys.stream()
+          .map(DeleteObjectsRequest.KeyVersion::new)
+          .collect(Collectors.toList());
+      request.setKeys(keyVersions);
+      DeleteObjectsResult result = mClient.deleteObjects(request);
+      return result.getDeletedObjects()
+          .stream()
+          .map(DeleteObjectsResult.DeletedObject::getKey)
+          .collect(Collectors.toList());
+    } catch (CosClientException e) {
+      LOG.warn("failed to delete objects");
+      throw AlluxioCosException.from(e);
+    }
   }
 
   @Override
@@ -228,7 +251,7 @@ public class COSUnderFileSystem extends ObjectUnderFileSystem {
     @Override
     public String[] getCommonPrefixes() {
       List<String> res = mResult.getCommonPrefixes();
-      return res.toArray(new String[res.size()]);
+      return res.toArray(new String[0]);
     }
 
     @Override
@@ -264,8 +287,9 @@ public class COSUnderFileSystem extends ObjectUnderFileSystem {
       if (meta == null) {
         return null;
       }
+      Date lastModifiedDate = meta.getLastModified();
       return new ObjectStatus(key, meta.getETag(), meta.getContentLength(),
-          meta.getLastModified().getTime());
+              lastModifiedDate != null ? lastModifiedDate.getTime() : null, meta.getCrc64Ecma());
     } catch (CosClientException e) {
       return null;
     }
@@ -303,7 +327,7 @@ public class COSUnderFileSystem extends ObjectUnderFileSystem {
       return new COSInputStream(mBucketNameInternal, key, mClient, options.getOffset(), retryPolicy,
           mUfsConf.getBytes(PropertyKey.UNDERFS_OBJECT_STORE_MULTI_RANGE_CHUNK_SIZE));
     } catch (CosClientException e) {
-      throw new IOException(e.getMessage());
+      throw AlluxioCosException.from(e);
     }
   }
 }

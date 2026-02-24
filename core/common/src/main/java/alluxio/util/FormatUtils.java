@@ -181,19 +181,24 @@ public final class FormatUtils {
       index--;
     }
     spaceSize = spaceSize.substring(0, index + 1);
-    double ret = Double.parseDouble(spaceSize);
+    double ret;
+    try {
+      ret = Double.parseDouble(spaceSize);
+    } catch (NumberFormatException e) {
+      throw new IllegalArgumentException("Fail to parse " + ori + " to bytes");
+    }
     end = end.toLowerCase();
     if (end.isEmpty() || end.equals("b")) {
       return (long) (ret + alpha);
-    } else if (end.equals("kb") || end.equals("k")) {
+    } else if (end.equals("kb") || end.equals("k") || end.equals("kib") || end.equals("ki")) {
       return (long) (ret * Constants.KB + alpha);
-    } else if (end.equals("mb") || end.equals("m")) {
+    } else if (end.equals("mb") || end.equals("m") || end.equals("mib") || end.equals("mi")) {
       return (long) (ret * Constants.MB + alpha);
-    } else if (end.equals("gb") || end.equals("g")) {
+    } else if (end.equals("gb") || end.equals("g") || end.equals("gib") || end.equals("gi")) {
       return (long) (ret * Constants.GB + alpha);
-    } else if (end.equals("tb") || end.equals("t")) {
+    } else if (end.equals("tb") || end.equals("t") || end.equals("tib") || end.equals("ti")) {
       return (long) (ret * Constants.TB + alpha);
-    } else if (end.equals("pb") || end.equals("p")) {
+    } else if (end.equals("pb") || end.equals("p") || end.equals("pib") || end.equals("pi")) {
       // When parsing petabyte values, we can't multiply with doubles and longs, since that will
       // lose presicion with such high numbers. Therefore we use a BigDecimal.
       BigDecimal pBDecimal = new BigDecimal(Constants.PB);
@@ -223,7 +228,12 @@ public final class FormatUtils {
       time = m.group(1);
       size = m.group(2);
     }
-    double douTime = Double.parseDouble(time);
+    double douTime;
+    try {
+      douTime = Double.parseDouble(time);
+    } catch (NumberFormatException e) {
+      throw new IllegalArgumentException("Fail to parse " + timeSize + " to milliseconds");
+    }
     long sign = 1;
     if (douTime < 0) {
       sign = -1;
@@ -246,23 +256,6 @@ public final class FormatUtils {
       return sign * (long) (douTime * Constants.DAY + alpha);
     } else {
       throw new IllegalArgumentException("Fail to parse " + timeSize + " to milliseconds");
-    }
-  }
-
-  /**
-   * Parses a boolean from a string.
-   *
-   * @param bool the boolean to parse
-   * @return whether the value was "true" or "false"
-   * @throws IllegalArgumentException if the value cannot be parsed
-   */
-  public static boolean parseBoolean(String bool) throws IllegalArgumentException {
-    if (bool.equalsIgnoreCase("true")) {
-      return true;
-    } else if (bool.equalsIgnoreCase("false")) {
-      return false;
-    } else {
-      throw new IllegalArgumentException("Failed to parse " + bool + " as boolean");
     }
   }
 
