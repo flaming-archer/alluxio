@@ -14,6 +14,7 @@ package alluxio.master.file;
 import static org.mockito.Mockito.mock;
 
 import alluxio.AlluxioURI;
+import alluxio.ConfigurationRule;
 import alluxio.Constants;
 import alluxio.conf.Configuration;
 import alluxio.conf.PropertyKey;
@@ -58,6 +59,7 @@ import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.junit.rules.TemporaryFolder;
 
+import java.io.Closeable;
 import java.io.IOException;
 import java.time.Clock;
 import java.util.ArrayList;
@@ -137,6 +139,15 @@ public final class PermissionCheckerTest {
 
     String getGroup() {
       return mGroup;
+    }
+  }
+
+  /**
+   * Test permission checker for factory loading.
+   */
+  public static class TestPermissionChecker extends DefaultPermissionChecker {
+    public TestPermissionChecker(InodeTree inodeTree) {
+      super(inodeTree);
     }
   }
 
@@ -428,6 +439,16 @@ public final class PermissionCheckerTest {
       AuthenticatedClientUser.set(TEST_USER_2.getUser());
       perm = mPermissionChecker.getPermission(path);
       Assert.assertEquals(TEST_WEIRD_MODE.getOtherBits(), perm);
+    }
+  }
+
+  @Test
+  public void permissionCheckerFactorySupportsCustomClass() throws Exception {
+    try (Closeable c = new ConfigurationRule(
+        PropertyKey.SECURITY_AUTHORIZATION_PERMISSION_CHECKER_CLASS,
+        TestPermissionChecker.class.getName(), Configuration.modifiableGlobal())) {
+      PermissionChecker checker = PermissionChecker.Factory.create(sTree, Configuration.global());
+      Assert.assertTrue(checker instanceof TestPermissionChecker);
     }
   }
 

@@ -7246,6 +7246,18 @@ public final class PropertyKey implements Comparable<PropertyKey> {
           .setConsistencyCheckLevel(ConsistencyCheckLevel.ENFORCE)
           .setScope(Scope.ALL)
           .build();
+  public static final PropertyKey SECURITY_AUTHORIZATION_PERMISSION_CHECKER_CLASS =
+      classBuilder(Name.SECURITY_AUTHORIZATION_PERMISSION_CHECKER_CLASS)
+          .setDefaultValue("alluxio.master.file.DefaultPermissionChecker")
+          .setDescription("The permission checker implementation used by masters for file system "
+              + "authorization. The class must implement "
+              + "'alluxio.master.file.PermissionChecker' and provide a constructor that takes "
+              + "'alluxio.master.file.meta.InodeTree'. This can be set to a Ranger-backed "
+              + "implementation to integrate with Apache Ranger.")
+          .setConsistencyCheckLevel(ConsistencyCheckLevel.ENFORCE)
+          .setScope(Scope.MASTER)
+          .setIsDynamic(false)
+          .build();
   public static final PropertyKey SECURITY_GROUP_MAPPING_CACHE_TIMEOUT_MS =
       durationBuilder(Name.SECURITY_GROUP_MAPPING_CACHE_TIMEOUT_MS)
           .setAlias("alluxio.security.group.mapping.cache.timeout.ms")
@@ -9237,6 +9249,8 @@ public final class PropertyKey implements Comparable<PropertyKey> {
         "alluxio.security.authorization.permission.supergroup";
     public static final String SECURITY_AUTHORIZATION_PERMISSION_UMASK =
         "alluxio.security.authorization.permission.umask";
+    public static final String SECURITY_AUTHORIZATION_PERMISSION_CHECKER_CLASS =
+        "alluxio.security.authorization.permission.checker.class";
     public static final String SECURITY_GROUP_MAPPING_CACHE_TIMEOUT_MS =
         "alluxio.security.group.mapping.cache.timeout";
     public static final String SECURITY_GROUP_MAPPING_CLASS =

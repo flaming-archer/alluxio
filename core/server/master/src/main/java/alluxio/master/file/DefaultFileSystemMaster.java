@@ -514,7 +514,7 @@ public class DefaultFileSystemMaster extends CoreMaster
         return Type.STATE_LOCK_TRACKER;
       }
     };
-    mPermissionChecker = new DefaultPermissionChecker(mInodeTree);
+    mPermissionChecker = PermissionChecker.Factory.create(mInodeTree, Configuration.global());
     mJobMasterClientPool = new JobMasterClientPool(JobMasterClientContext
         .newBuilder(ClientContext.create(Configuration.global())).build());
     mPersistRequests = new ConcurrentHashMap<>();
